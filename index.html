@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="球録">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<title>球録</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top-band">
+    <span id="app-title">球録</span>
+    <div id="update-area">
+      <button type="button" id="update-btn" hidden>新しい版があります。更新する</button>
+      <small id="update-note" hidden>入力の途中の内容は残りません。記録の途中で押さないでください。</small>
+    </div>
+  </header>
+  <p id="global-msg" class="notice error" role="alert" hidden></p>
+  <main>
+    <section class="tab-panel" id="panel-record" aria-label="記録"></section>
+    <section class="tab-panel" id="panel-settings" aria-label="設定" hidden></section>
+  </main>
+  <nav id="tab-bar" aria-label="タブ">
+    <button type="button" class="tab-btn on" data-tab="record" aria-selected="true">記録</button>
+    <button type="button" class="tab-btn" data-tab="settings" aria-selected="false">設定</button>
+  </nav>
+</div>
+<div id="dialog-root" hidden></div>
+<noscript><p>球録を使うには、JavaScript を有効にしてください。</p></noscript>
+<script src="js/constants.js"></script>
+<script src="js/core.js"></script>
+<script src="js/db.js"></script>
+<script src="js/awake.js"></script>
+<script src="js/ui-record.js"></script>
+<script src="js/ui-settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
