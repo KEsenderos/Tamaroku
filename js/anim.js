@@ -2,10 +2,7 @@
 // anim.js（球録 v0.1.4）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
-const BAT_LEN = 118;
-const SHOULDER = [288, 128];
-const HIP = [290, 190];
-const READY_HAND = [266, 112];
+const BAT_LEN = 108;
 const BALL_START = [160, 34];
 const T_HIT = 0.57;                               // 球がゾーンに着く（打つ）瞬間（0〜1）
 const GROUND_Y = 286;
@@ -23,9 +20,16 @@ function easeOut(x) { x = clamp01(x); return 1 - (1 - x) * (1 - x); }
 function cellCenter(row, col) { return [ZX0 + ZCELL * (col - 0.5), ZY0 + ZCELL * (row - 0.5)]; }
 
 // ---- 打者の絵（右打者を基準。左打者は左右反転）----
+// 投手から見た絵。右打者は、ゾーンの右側（三塁側）に立ち、体はホームベース（画面の左）へ向け、顔は投手（こちら）へ向ける。
+// バットは、うしろの肩（画面の右）の上に構える。骨格（肩・ひじ・手・腰・ひざ・足）を計算して、1コマずつ描く。
+const CX = 290, HIPY = 192, HEAD_R = 16, ARM1 = 48, ARM2 = 46, LEG1 = 56, LEG2 = 56;
+const FOOT_F0 = [254, GROUND_Y], FOOT_B0 = [322, GROUND_Y];
+const HAND_READY = [308, 96];                   // 構えたときの手の位置（うしろの耳のあたり）
+const BAT_READY = [-0.08, -1];                  // 構えたときのバットの向き（ほぼ真上）
+
 function drawSilhouette(svg, side) {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
-  svg.setAttribute('viewBox', '-30 -40 380 340');
+  svg.setAttribute('viewBox', '-30 -22 380 322');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', '打者のシルエットとコース');
   const zone = svgNode('g', { 'class': 'sil-zone' });
@@ -37,47 +41,63 @@ function drawSilhouette(svg, side) {
   const cellHit = svgNode('rect', { width: ZCELL, height: ZCELL, 'class': 'sz-hit', opacity: 0 });
   svg.appendChild(cellHit);
   svg.appendChild(svgNode('line', { x1: 20, y1: GROUND_Y + 6, x2: 300, y2: GROUND_Y + 6, 'class': 'sil-ground' }));
-  // 打者（右打者の座標で描き、左打者は左右反転）
   const body = svgNode('g', { transform: side === 'L' ? 'translate(320,0) scale(-1,1)' : '' });
-  body.appendChild(svgNode('path', { d: 'M ' + HIP[0] + ' ' + HIP[1] + ' L 258 ' + GROUND_Y, 'class': 'sil-limb', 'stroke-width': 15 }));        // 前の脚（ゾーン側）
-  body.appendChild(svgNode('path', { d: 'M ' + HIP[0] + ' ' + HIP[1] + ' L 308 ' + GROUND_Y, 'class': 'sil-limb', 'stroke-width': 15 }));        // うしろの脚
+  const mk = function (tag, cls, extra) { const e = svgNode(tag, Object.assign({ 'class': cls }, extra || {})); return e; };
+  const legB = mk('path', 'sil-limb', { 'stroke-width': 17 }), legF = mk('path', 'sil-limb', { 'stroke-width': 17 });
+  const footB = mk('ellipse', 'sil-fill', { rx: 13, ry: 5 }), footF = mk('ellipse', 'sil-fill', { rx: 13, ry: 5 });
   const lean = svgNode('g', {});
-  lean.appendChild(svgNode('path', { d: 'M ' + HIP[0] + ' ' + HIP[1] + ' L 288 118', 'class': 'sil-limb', 'stroke-width': 30 }));                  // 胴
-  lean.appendChild(svgNode('circle', { cx: 286, cy: 92, r: 17, 'class': 'sil-fill' }));                                                         // 頭
-  lean.appendChild(svgNode('path', { d: 'M 269 90 L 262 94 L 270 98 Z', 'class': 'sil-fill' }));                                               // ヘルメットのつば
-  const arms = svgNode('path', { d: '', 'class': 'sil-limb', 'stroke-width': 11, fill: 'none' });
-  const bat = svgNode('polygon', { points: '', 'class': 'sil-fill' });
-  lean.appendChild(arms); lean.appendChild(bat);
-  body.appendChild(lean);
+  const torso = mk('polygon', 'sil-fill sil-round', { points: '', 'stroke-width': 12 });
+  const neck = mk('path', 'sil-limb', { 'stroke-width': 12 });
+  const head = mk('circle', 'sil-fill', { r: HEAD_R });
+  const brim = mk('polygon', 'sil-fill', { points: '' });
+  const armBh = mk('path', 'sil-halo', { 'stroke-width': 17 }), armB = mk('path', 'sil-limb', { 'stroke-width': 12 });
+  const armFh = mk('path', 'sil-halo', { 'stroke-width': 17 }), armF = mk('path', 'sil-limb', { 'stroke-width': 12 });
+  const batH = mk('polygon', 'sil-halo-fill', { points: '' }), bat = mk('polygon', 'sil-fill', { points: '' });
+  [torso, neck, head, brim, armBh, armB, armFh, armF, batH, bat].forEach(function (e) { lean.appendChild(e); });
+  [legB, legF, footB, footF, lean].forEach(function (e) { body.appendChild(e); });
   svg.appendChild(body);
-  // 球・ミット・当たった印
   const mitt = svgNode('ellipse', { rx: 17, ry: 13, 'class': 'sil-mitt', opacity: 0 });
   const impact = svgNode('polygon', { points: '', 'class': 'sil-impact', opacity: 0 });
   const ball = svgNode('circle', { r: 3, 'class': 'sil-ball', opacity: 0 });
   svg.appendChild(mitt); svg.appendChild(impact); svg.appendChild(ball);
-  const parts = { svg: svg, side: side, body: body, lean: lean, arms: arms, bat: bat, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
+  const parts = { svg: svg, side: side, body: body, lean: lean, legB: legB, legF: legF, footB: footB, footF: footF, torso: torso, neck: neck, head: head, brim: brim,
+    armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);
   return parts;
 }
 
-function setBat(parts, px, py, aDeg) {
-  const a = aDeg * Math.PI / 180;
-  const dx = Math.cos(a), dy = Math.sin(a);
+// 2つの骨（長さ L1, L2）で、始点 S から終点 P まで届くときの、関節（ひじ・ひざ）の位置。pick(n) が大きい向きに曲げる
+function bend(S, P, L1, L2, pick) {
+  let dx = P[0] - S[0], dy = P[1] - S[1];
+  let d = Math.sqrt(dx * dx + dy * dy) || 1;
+  const maxd = L1 + L2 - 1;
+  if (d > maxd) { dx *= maxd / d; dy *= maxd / d; d = maxd; P = [S[0] + dx, S[1] + dy]; }
+  const ux = dx / d, uy = dy / d;
+  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  const nx = -uy, ny = ux;
+  const sgn = pick(nx, ny) >= pick(-nx, -ny) ? 1 : -1;
+  return { joint: [S[0] + ux * a + nx * h * sgn, S[1] + uy * a + ny * h * sgn], end: P };
+}
+const pts2 = function (list) { return list.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '); };
+const path3 = function (a, b, c) { return 'M ' + a[0].toFixed(1) + ' ' + a[1].toFixed(1) + ' L ' + b[0].toFixed(1) + ' ' + b[1].toFixed(1) + ' L ' + c[0].toFixed(1) + ' ' + c[1].toFixed(1); };
+
+// バット：手の位置 (px,py)、向きと長さのベクトル (vx,vy)（長さ1で全長）。手前（にぎり）を少し延ばして描く
+function setBat(parts, px, py, vx, vy) {
+  const len = Math.sqrt(vx * vx + vy * vy);
+  const L = BAT_LEN * len;
+  const dx = len > 0.001 ? vx / len : 1, dy = len > 0.001 ? vy / len : 0;
   const nx = -dy, ny = dx;
-  const K = [px - dx * 12, py - dy * 12], H = [px + dx * 40, py + dy * 40], T = [px + dx * BAT_LEN, py + dy * BAT_LEN];
-  const pts = [
-    [K[0] + nx * 3, K[1] + ny * 3], [H[0] + nx * 3.5, H[1] + ny * 3.5], [T[0] + nx * 6.5, T[1] + ny * 6.5],
-    [T[0] - nx * 6.5, T[1] - ny * 6.5], [H[0] - nx * 3.5, H[1] - ny * 3.5], [K[0] - nx * 3, K[1] - ny * 3]
-  ];
-  parts.bat.setAttribute('points', pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '));
-  // 腕：肩 → ひじ → 手（ひじは、下側へ少し出す）
-  const vx = px - SHOULDER[0], vy = py - SHOULDER[1];
-  const len = Math.sqrt(vx * vx + vy * vy) || 1;
-  let ex = -vy / len, ey = vx / len;
-  if (ey < 0) { ex = -ex; ey = -ey; }
-  const E = [(SHOULDER[0] + px) / 2 + ex * 14, (SHOULDER[1] + py) / 2 + ey * 14];
-  parts.arms.setAttribute('d', 'M ' + SHOULDER[0] + ' ' + SHOULDER[1] + ' L ' + E[0].toFixed(1) + ' ' + E[1].toFixed(1) + ' L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+  const K = [px - dx * 12, py - dy * 12], H = [px + dx * (12 + (L - 12) * 0.38), py + dy * (12 + (L - 12) * 0.38)], T = [px + dx * L, py + dy * L];
+  const mkPoly = function (grow) {
+    return pts2([
+      [K[0] + nx * (2.5 + grow), K[1] + ny * (2.5 + grow)], [H[0] + nx * (3.5 + grow), H[1] + ny * (3.5 + grow)], [T[0] + nx * (6 + grow), T[1] + ny * (6 + grow)],
+      [T[0] - nx * (6 + grow), T[1] - ny * (6 + grow)], [H[0] - nx * (3.5 + grow), H[1] - ny * (3.5 + grow)], [K[0] - nx * (2.5 + grow), K[1] - ny * (2.5 + grow)]
+    ]);
+  };
+  parts.bat.setAttribute('points', mkPoly(0));
+  parts.batH.setAttribute('points', mkPoly(2.5));
 }
 
 function foulScreenDir(pitch) {                    // 画面での飛ぶ向き（投手から見た絵。一塁側は画面の左）
@@ -90,31 +110,60 @@ function foulScreenDir(pitch) {                    // 画面での飛ぶ向き�
 }
 function isSwing(pitch) { return pitch.result === 'MISS' || pitch.result === 'FOUL' || pitch.result === 'INPLAY'; }
 
+// この球の、打者の姿勢（時間 t）。pitch が null のときは構え
+function poseAt(pitch, t) {
+  const P = { hw: 24, shF: 118, shB: 112, hand: HAND_READY.slice(), bat: BAT_READY.slice(), footF: FOOT_F0.slice(), footB: FOOT_B0.slice(), headDx: -2, lean: 0 };
+  if (!pitch) return P;
+  // ① 足を上げて、踏み出す（どの球でも、同じ。t 0.04〜0.36）
+  const lift = easeOut(clamp01((t - 0.04) / 0.14)) * (1 - easeIn(clamp01((t - 0.20) / 0.16)));
+  const stride = easeOut(clamp01((t - 0.10) / 0.26));
+  P.footF = [lerp(FOOT_F0[0], FOOT_F0[0] - 14, stride), GROUND_Y - 26 * lift];
+  const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
+  const bunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
+  if (isSwing(pitch)) {
+    const off = pitch.result === 'MISS' ? (pitch.row <= 3 ? 22 : -22) : 0;                  // 空振りは、球の下（または上）を振る
+    const tx = cx, ty = cy + off;
+    const hx = Math.max(226, Math.min(262, tx + BAT_LEN * 0.78)), hy = Math.max(118, Math.min(172, ty));
+    let ddx = tx - hx, ddy = ty - hy; const dl = Math.sqrt(ddx * ddx + ddy * ddy);
+    if (dl < 8) { ddx = -1; ddy = 0; } else { ddx /= dl; ddy /= dl; }
+    const tau = clamp01((t - 0.30) / 0.45);
+    const aR = Math.atan2(BAT_READY[1], BAT_READY[0]);                                       // 約 -95°
+    let aC = Math.atan2(ddy, ddx); if (aC > 0) aC -= Math.PI * 2;                           // 上から左へ回って当たる向き
+    if (bunt) {
+      const k = easeOut(tau / 0.5);
+      P.hand = [lerp(HAND_READY[0], hx + 6, k), lerp(HAND_READY[1], hy, k)];
+      const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
+      P.hw = lerp(24, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
+    } else if (tau < 0.6) {
+      const k = easeIn(tau / 0.6);
+      P.hand = [lerp(HAND_READY[0], hx, k), lerp(HAND_READY[1], hy, k)];
+      const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
+      P.hw = lerp(24, 30, k); P.shF = lerp(118, 112, k); P.shB = lerp(112, 124, k);
+      P.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, k), GROUND_Y - 5 * k];                    // うしろの足のかかとが上がる
+      P.headDx = lerp(-2, -4, k);
+    } else {
+      const f = easeOut((tau - 0.6) / 0.4);
+      const Vc = [Math.cos(aC), Math.sin(aC)], Vm = [0, -0.5], Vf = [0.97, -0.18];          // 当たったあと、バットは前を回って、うしろの肩へ巻く
+      const q = function (i) { return (1 - f) * (1 - f) * Vc[i] + 2 * (1 - f) * f * Vm[i] + f * f * Vf[i]; };
+      P.bat = [q(0), q(1)];
+      P.hand = [lerp(hx, 256, f), lerp(hy, 104, f)];
+      P.hw = lerp(30, 14, f); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
+      P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
+      P.footF = [FOOT_F0[0] - 14, GROUND_Y];
+      P.headDx = lerp(-4, -10, f);
+    }
+  }
+  if (pitch.result === 'HBP') P.lean = lerp(0, 10, easeOut((t - T_HIT) / 0.12));
+  return P;
+}
+
 // t（0〜1）の姿勢を描く。pitch が null のときは、構えだけ（球なし）
 function renderFrame(parts, pitch, t, still) {
   const side = parts.side;
   const bxm = function (x) { return side === 'L' ? 320 - x : x; };   // 打者側の座標 → 画面の座標
-  let px = READY_HAND[0], py = READY_HAND[1], a = -72, leanDeg = 0;
   parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0);
   if (pitch) {
     const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
-    const bunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
-    if (isSwing(pitch)) {
-      const off = pitch.result === 'MISS' ? (pitch.row <= 3 ? 22 : -22) : 0;      // 空振りは、球の下（または上）を振る
-      const cpx = Math.max(232, Math.min(266, cx + BAT_LEN * 0.75)), cpy = cy + off;
-      const tau = clamp01((t - 0.30) / 0.45);
-      if (bunt) {
-        const k = easeOut(tau / 0.5);
-        a = lerp(-72, -180, k); px = lerp(READY_HAND[0], cpx + 8, k); py = lerp(READY_HAND[1], cpy, k);
-      } else if (tau < 0.6) {
-        const k = easeIn(tau / 0.6);
-        a = lerp(-72, -180, k); px = lerp(READY_HAND[0], cpx, k); py = lerp(READY_HAND[1], cpy, k);
-      } else {
-        const k = easeOut((tau - 0.6) / 0.4);
-        a = lerp(-180, -222, k); px = lerp(cpx, cpx - 12, k); py = lerp(cpy, cpy - 16, k);
-      }
-    }
-    if (pitch.result === 'HBP') leanDeg = lerp(0, 10, easeOut((t - T_HIT) / 0.12));
     // 球
     let bx, by, br = 7, bo = 1;
     if (t < T_HIT) {
@@ -136,12 +185,10 @@ function renderFrame(parts, pitch, t, still) {
     parts.ball.setAttribute('cx', bx.toFixed(1)); parts.ball.setAttribute('cy', by.toFixed(1)); parts.ball.setAttribute('r', br.toFixed(1));
     parts.ball.setAttribute('opacity', (t < 0.01 ? 0 : bo).toFixed(2));
     parts.ball.style.fill = (typeof typeInfo === 'function') ? typeInfo(pitch.pitchType).color : '#E5E7EB';
-    // ミット（見逃し・空振りのとき、球が収まる）
     if (pitch.result === 'TAKEN' || pitch.result === 'MISS') {
       parts.mitt.setAttribute('cx', cx); parts.mitt.setAttribute('cy', cy + 3);
       parts.mitt.setAttribute('opacity', (0.55 * clamp01((t - T_HIT) / 0.1)).toFixed(2));
     }
-    // 当たった印（打った・死球）
     if (t >= T_HIT && (pitch.result === 'FOUL' || pitch.result === 'INPLAY' || pitch.result === 'HBP')) {
       const w = clamp01((t - T_HIT) / 0.18);
       const R0 = 6 + 14 * w, pts = [];
@@ -149,11 +196,34 @@ function renderFrame(parts, pitch, t, still) {
       parts.impact.setAttribute('points', pts.join(' '));
       parts.impact.setAttribute('opacity', (1 - w).toFixed(2));
     }
-    // 球が着いたマスの強調
     if (t >= T_HIT) { parts.cellHit.setAttribute('x', ZX0 + ZCELL * (pitch.col - 1)); parts.cellHit.setAttribute('y', ZY0 + ZCELL * (pitch.row - 1)); parts.cellHit.setAttribute('opacity', 1); }
   }
-  setBat(parts, px, py, a);
-  parts.lean.setAttribute('transform', leanDeg ? 'rotate(' + leanDeg.toFixed(1) + ' ' + HIP[0] + ' ' + HIP[1] + ')' : '');
+  applyPose(parts, poseAt(pitch, pitch ? t : 0));
+}
+
+function applyPose(parts, P) {
+  const FS = [CX - P.hw, P.shF], BS = [CX + P.hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
+  const hipF = [CX - 14, HIPY], hipB = [CX + 14, HIPY];
+  parts.torso.setAttribute('points', pts2([FS, BS, [CX + 16, HIPY], [CX - 16, HIPY]]));
+  const mid = [(FS[0] + BS[0]) / 2, (FS[1] + BS[1]) / 2];
+  const hd = [CX + P.headDx, mid[1] - 30];
+  parts.neck.setAttribute('d', 'M ' + mid[0].toFixed(1) + ' ' + mid[1].toFixed(1) + ' L ' + hd[0].toFixed(1) + ' ' + (hd[1] + 6).toFixed(1));
+  parts.head.setAttribute('cx', hd[0].toFixed(1)); parts.head.setAttribute('cy', hd[1].toFixed(1));
+  parts.brim.setAttribute('points', pts2([[hd[0] - 13, hd[1] - 5], [hd[0] - 31, hd[1] + 2], [hd[0] - 13, hd[1] + 5]]));      // ヘルメットのつば（こちら＝ホーム側へ）
+  // 腕（ひじは、前の腕は下へ、うしろの腕は外側（または下）へ曲がる）
+  const hand = P.hand;
+  const eF = bend(FS, hand, ARM1, ARM2, function (nx, ny) { return ny; });
+  const eB = bend(BS, hand, ARM1, ARM2, function (nx, ny) { return Math.abs(nx) > 0.35 ? nx : ny; });
+  const dF = path3(FS, eF.joint, eF.end), dB = path3(BS, eB.joint, eB.end);
+  parts.armF.setAttribute('d', dF); parts.armFh.setAttribute('d', dF); parts.armB.setAttribute('d', dB); parts.armBh.setAttribute('d', dB);
+  setBat(parts, hand[0], hand[1], P.bat[0], P.bat[1]);
+  // 脚
+  const kF = bend(hipF, P.footF, LEG1, LEG2, function (nx, ny) { return -nx; });
+  const kB = bend(hipB, P.footB, LEG1, LEG2, function (nx, ny) { return -nx; });
+  parts.legF.setAttribute('d', path3(hipF, kF.joint, kF.end)); parts.legB.setAttribute('d', path3(hipB, kB.joint, kB.end));
+  parts.footF.setAttribute('cx', (P.footF[0] - 5).toFixed(1)); parts.footF.setAttribute('cy', (P.footF[1] + 3).toFixed(1));
+  parts.footB.setAttribute('cx', (P.footB[0] - 5).toFixed(1)); parts.footB.setAttribute('cy', (P.footB[1] + 3).toFixed(1));
+  parts.lean.setAttribute('transform', P.lean ? 'rotate(' + P.lean.toFixed(1) + ' ' + CX + ' ' + HIPY + ')' : '');
 }
 
 // ---- 打球の行き先（野球場の小さな図）----

@@ -29,28 +29,25 @@ function filterPitches(pitches, pas, batterId, f) {
   });
 }
 
-// 1球の説明（文字だけ）
+// 1球の説明（文字だけ。短く）
 function reactionText(p) {
-  if (p.result === 'TAKEN') return '見送った（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '判定）';
-  if (p.result === 'MISS') return 'スイングして空振り';
-  if (p.result === 'HBP') return '体に当たった（死球）';
+  if (p.result === 'TAKEN') return '見逃し（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）';
+  if (p.result === 'MISS') return '空振り';
+  if (p.result === 'HBP') return '死球';
   if (p.result === 'FOUL') return 'ファウル（' + (p.foulType ? FOUL_LABEL[p.foulType] : '') + (p.foulDir ? '・' + FOULDIR_LABEL[p.foulDir] : '') + '）';
-  if (p.result === 'INPLAY' && p.inplay) {
-    return '打った（' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome] +
-      (Number.isInteger(p.inplay.outsAdded) ? '・アウト+' + p.inplay.outsAdded : '') + '）';
-  }
+  if (p.result === 'INPLAY' && p.inplay) return '打った：' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome];
   return RESULT_LABEL[p.result];
 }
 function marksText(p) { return p.marks && p.marks.length ? '【' + p.marks.map(function (m) { return MARK_LABEL[m]; }).join('・') + '】' : ''; }
-function afterText(p, pa) {                      // この球のあとの状態
+function afterText(p, pa) {                      // この球のあと（カウント、または打席の結果）
   const lastInPa = RV.pitches.filter(function (x) { return x.paId === p.paId; }).reduce(function (m, x) { return Math.max(m, x.paSeq); }, 0) === p.paSeq;
   const cnt = applyPitchToCount(p.sit.balls, p.sit.strikes, { result: p.result, takenCall: p.takenCall, caught: p.marks.indexOf('CAUGHT_OUT') >= 0 });
   if (lastInPa && pa) {
-    if (pa.endType === 'SKIPPED') return 'この打席は、終わりの球が記録されていません';
+    if (pa.endType === 'SKIPPED') return '打席の終わりの球が記録されていません';
     if (pa.endType === 'INPLAY' && pa.outcome) return '打席の結果：' + OUTCOME_LABEL[pa.outcome];
     if (pa.endType) return '打席の結果：' + END_LABEL[pa.endType];
   }
-  return 'この球のあとのカウント：B' + cnt.balls + ' S' + cnt.strikes;
+  return 'B' + cnt.balls + ' S' + cnt.strikes + ' になった';
 }
 
 // ---- 読み込みと全体 ----
@@ -91,19 +88,21 @@ function drawReview() {
   if (RV.loadErr) { stack.appendChild(el('p', { class: 'notice error', text: (RV.loadErr.code === 'NO_IDB') ? MSG.NO_DB : MSG.SAVE_FAIL(RV.loadErr.message || '不明') })); panel.appendChild(stack); return; }
   if (!RV.game) { stack.appendChild(el('p', { class: 'notice', text: 'まだ記録がありません。記録タブで試合を始めて、球を記録してください。' })); panel.appendChild(stack); return; }
   refilter();
-  // 選ぶ：試合 → 打者 → 絞り込み
-  const gameOpts = RV.games.map(function (g) { const p = g.pitchers[g.pitchers.length - 1]; return [g.id, g.date + '　投手：' + p.name]; });
+  // 選ぶ：試合 → 打者（横に並べる）。絞り込みは、ふだんは閉じておく
+  const gameOpts = RV.games.map(function (g) { const p = g.pitchers[g.pitchers.length - 1]; return [g.id, g.date.slice(5).replace('-', '/') + ' ' + p.name]; });
   const batters = []; const seen = new Set();
   RV.pas.forEach(function (a) { if (!seen.has(a.batterId)) { seen.add(a.batterId); batters.push([a.batterId, a.batterName]); } });
   const paOpts = [['ALL', 'すべて']].concat(RV.pas.filter(function (a) { return RV.batterId === 'ALL' || a.batterId === RV.batterId; }).map(function (a) {
     return [a.id, '第' + a.paNo + '打席 ' + a.batterName + '（' + sideLabel(a.side) + '）' + (a.endType ? '：' + END_LABEL[a.endType] : '：途中')];
   }));
   const usedTypes = []; RV.pitches.forEach(function (p) { if (usedTypes.indexOf(p.pitchType) < 0) usedTypes.push(p.pitchType); });
-  const sel = el('div', { class: 'card sel-card' }, [
-    selectEl('rv-game', '試合', gameOpts, RV.gameId, function (v) { RV.gameId = v; RV.batterId = 'ALL'; resetFilter(); RV.idx = -1; renderReview(); }),
-    selectEl('rv-batter', '打者', [['ALL', 'すべての打者']].concat(batters), RV.batterId, function (v) { RV.batterId = v; RV.filter.paId = 'ALL'; RV.idx = -1; drawReview(); }),
+  const sel = el('div', { class: 'sel-card' }, [
+    el('div', { class: 'sel-row' }, [
+      selectEl('rv-game', '試合', gameOpts, RV.gameId, function (v) { RV.gameId = v; RV.batterId = 'ALL'; resetFilter(); RV.idx = -1; renderReview(); }),
+      selectEl('rv-batter', '打者', [['ALL', 'すべての打者']].concat(batters), RV.batterId, function (v) { RV.batterId = v; RV.filter.paId = 'ALL'; RV.idx = -1; drawReview(); })
+    ]),
     el('details', { class: 'filters' }, [
-      el('summary', { text: '絞り込み（なくてもよい）' + (filterActive() ? '：あり' : '') }),
+      el('summary', { text: '絞り込み' + (filterActive() ? '（あり）' : '') + '　選んだ範囲：' + RV.list.length + '球' }),
       selectEl('rv-pa', '打席', paOpts, RV.filter.paId, function (v) { RV.filter.paId = v; RV.idx = -1; drawReview(); }),
       selectEl('rv-count', 'カウント（ボール-ストライク）', [['ALL', 'すべて']].concat(COUNT_LIST.map(function (c) { return [c, c]; })), RV.filter.count, function (v) { RV.filter.count = v; RV.idx = -1; drawReview(); }),
       selectEl('rv-type', '球種', [['ALL', 'すべて']].concat(usedTypes.map(function (c) { return [c, rvTypeName(c)]; })), RV.filter.type, function (v) { RV.filter.type = v; RV.idx = -1; drawReview(); }),
@@ -115,7 +114,6 @@ function drawReview() {
   stack.appendChild(el('div', { class: 'seg', role: 'tablist' }, REVIEW_VIEWS.map(function (v) {
     return el('button', { type: 'button', class: 'btn seg-btn' + (RV.view === v[0] ? ' on' : ''), 'data-view': v[0], role: 'tab', 'aria-selected': RV.view === v[0] ? 'true' : 'false', text: v[1], onclick: function () { RV.view = v[0]; drawReview(); } });
   })));
-  stack.appendChild(el('p', { class: 'sub', id: 'rv-count-line', text: '選んだ範囲：' + RV.list.length + '球' }));
   if (RV.list.length === 0) stack.appendChild(el('p', { class: 'notice', text: '条件に合う球がありません。絞り込みを変えてください。' }));
   else if (RV.view === 'play') stack.appendChild(buildPlay());
   else if (RV.view === 'list') stack.appendChild(buildPitchList(RV.filter));
@@ -126,28 +124,32 @@ function drawReview() {
 function filterActive() { const f = RV.filter; return f.count !== 'ALL' || f.type !== 'ALL' || f.result !== 'ALL' || f.side !== 'ALL' || f.paId !== 'ALL'; }
 
 // ---- 再生（次の球ボタン。シルエットの動き）----
+// 画面：大きなシルエット（打球の行き先は、すみに小さく）→ 球種とコース → 結果 → 小さな補足 → 操作ボタン（画面の下に固定）
 function buildPlay() {
   const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('class', 'sil-svg');
   const field = document.createElementNS(SVGNS, 'svg'); field.setAttribute('class', 'fd-svg');
+  const fdWrap = el('div', { class: 'fd-wrap' }, field);
   const info = {
-    head: el('p', { id: 'rv-head', class: 'rv-head' }), pos: el('p', { id: 'rv-pos', class: 'rv-pos' }),
-    type: el('p', { id: 'rv-type-line' }), course: el('p', { id: 'rv-course' }), react: el('p', { id: 'rv-react', class: 'rv-react' }),
-    after: el('p', { id: 'rv-after', class: 'sub' }), mini: el('div', { id: 'rv-mini' })
+    type: el('p', { id: 'rv-type-line', class: 'rv-type' }), react: el('p', { id: 'rv-react', class: 'rv-react' }),
+    after: el('p', { id: 'rv-after', class: 'sub tiny' }), who: el('p', { id: 'rv-who', class: 'sub tiny' })
   };
-  const btn = function (id, label, fn) { return el('button', { type: 'button', class: 'btn', id: id, text: label, onclick: fn }); };
+  const btn = function (id, label, fn) { return el('button', { type: 'button', class: 'btn small', id: id, text: label, onclick: fn }); };
   const next = el('button', { type: 'button', class: 'btn primary big-next', id: 'rv-next', text: '次の球', onclick: function () { rvStep(1); } });
-  const prev = btn('rv-prev', '前の球', function () { rvStep(-1); });
+  const prev = el('button', { type: 'button', class: 'btn prev-btn', id: 'rv-prev', text: '前の球', onclick: function () { rvStep(-1); } });
   const again = btn('rv-again', 'もう一度', function () { rvStep(0); });
   const first = btn('rv-first', '最初から', function () { rvGo(-1); });
-  RV.play = { svg: svg, field: field, info: info, next: next, prev: prev, again: again, first: first };
+  RV.play = { svg: svg, field: field, fdWrap: fdWrap, info: info, next: next, prev: prev, again: again, first: first };
   const firstPa = RV.list.length ? rvPaOf(RV.list[0]) : null;
-  drawSilhouette(svg, RV.idx >= 0 && RV.list[RV.idx] && rvPaOf(RV.list[RV.idx]) ? rvPaOf(RV.list[RV.idx]).side : (firstPa ? firstPa.side : 'R'));
+  const curPaObj = RV.idx >= 0 && RV.list[RV.idx] ? rvPaOf(RV.list[RV.idx]) : null;
+  drawSilhouette(svg, curPaObj ? curPaObj.side : (firstPa ? firstPa.side : 'R'));
   drawField(field);
-  const box = el('div', { class: 'card play' }, [
-    el('div', { class: 'play-figs' }, [el('div', { class: 'sil-wrap' }, svg), el('div', { class: 'fd-wrap' }, [field, el('p', { class: 'sub fd-cap', text: '打球の行き先（目安）' })])]),
-    info.head, info.pos, info.type, info.course, info.react, info.after,
-    el('div', { class: 'btn-row wrap play-btns' }, [first, prev, next, again]),
-    el('h2', { text: 'この打席の、ここまでの球' }), info.mini
+  const box = el('div', { class: 'play' }, [
+    el('div', { class: 'stage' }, [svg, fdWrap]),
+    el('div', { class: 'card play-text' }, [info.type, info.react, info.who, info.after]),
+    el('div', { class: 'play-ctl' }, [
+      el('div', { class: 'btn-row' }, [prev, next]),
+      el('div', { class: 'btn-row sub-row' }, [again, first])
+    ])
   ]);
   rvShow(false);
   return box;
@@ -161,24 +163,22 @@ function rvShow(animate) {
   pl.prev.disabled = i <= 0; pl.next.disabled = i >= n - 1; pl.again.disabled = i < 0; pl.first.disabled = i < 0;
   pl.next.textContent = i >= n - 1 ? '最後の球です' : '次の球';
   const inf = pl.info;
+  pl.fdWrap.className = 'fd-wrap off';
   if (i < 0) {
-    inf.head.textContent = '「次の球」を押すと、1球ずつ再生します'; inf.pos.textContent = '全 ' + n + ' 球';
-    inf.type.textContent = ''; inf.course.textContent = ''; inf.react.textContent = ''; inf.after.textContent = ''; inf.mini.textContent = '';
+    inf.type.textContent = '「次の球」を押すと、1球ずつ再生します'; inf.react.textContent = ''; inf.react.className = 'rv-react';
+    inf.who.textContent = '全 ' + n + ' 球'; inf.after.textContent = '';
     drawSilhouette(pl.svg, (RV.list[0] && rvPaOf(RV.list[0])) ? rvPaOf(RV.list[0]).side : 'R'); drawField(pl.field);
     return;
   }
   const p = RV.list[i]; const pa = rvPaOf(p); const side = pa ? pa.side : 'R';
-  inf.head.textContent = '第' + (pa ? pa.paNo : '?') + '打席　' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '打席）　投手：' + p.pitcher.name + '（' + sideLabel(p.pitcher.hand) + '）';
-  inf.pos.textContent = '球 ' + (i + 1) + ' / ' + n + '　（この打席の ' + p.paSeq + ' 球目）　投げる前のカウント：B' + p.sit.balls + ' S' + p.sit.strikes + (p.sitEdited ? '　※状況を修正' : '');
-  inf.type.textContent = '球種：' + rvTypeName(p.pitchType);
-  inf.course.textContent = 'コース：' + zoneLabel(p.row, p.col, side) + (isStrikeZone(p.row, p.col) ? '（ストライクゾーン）' : '（ボールゾーン）');
-  inf.react.textContent = '打者の反応：' + reactionText(p) + ' ' + marksText(p);
-  inf.after.textContent = afterText(p, pa) + (p.memo ? '　メモ：' + p.memo : '');
+  inf.type.textContent = rvTypeName(p.pitchType) + '　' + zoneLabel(p.row, p.col, side);
+  inf.react.textContent = reactionText(p) + ' ' + marksText(p);
+  inf.react.className = 'rv-react rr-' + p.result;
+  inf.who.textContent = '第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　' + p.paSeq + '球目　B' + p.sit.balls + ' S' + p.sit.strikes + 'から　' + (i + 1) + '/' + n + '球';
+  inf.after.textContent = afterText(p, pa) + (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
   if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side); }
+  pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-left' : 'at-right') : 'off');
   playMotion(pl.svg, p, { field: pl.field });
-  inf.mini.textContent = '';
-  const upto = RV.list.filter(function (x) { return x.paId === p.paId && x.seq <= p.seq; });
-  inf.mini.appendChild(drawZoneChart(upto, side, true));
 }
 
 // ---- 一覧 ----
