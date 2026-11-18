@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.10）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.11）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -136,7 +136,9 @@ function poseAt(pitch, t) {
   // ① 足を上げて、踏み出す（どの球でも、同じ。t 0.04〜0.36）
   const lift = easeOut(clamp01((t - 0.04) / 0.14)) * (1 - easeIn(clamp01((t - 0.20) / 0.16)));
   const stride = easeOut(clamp01((t - 0.10) / 0.26));
-  P.footF = [lerp(FOOT_F0[0], FOOT_F0[0] - 14, stride), GROUND_Y - 26 * lift];
+  const isBunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
+  const strideX = (isSwing(pitch) && !isBunt) ? FOOT_B0[0] + 8 : FOOT_F0[0] - 14;               // 打つ・空振りのときは、投手側へ大きく踏み込み、うしろの足と重なって、その外側へ出る（クローズドの構えが開く）
+  P.footF = [lerp(FOOT_F0[0], strideX, stride), GROUND_Y - 26 * lift];
   const loadIn = easeOut(clamp01((t - 0.08) / 0.18));                                        // 引く（t 0.08〜0.26）
   const swing = isSwing(pitch);
   const back = swing ? 1 : 1 - easeIn(clamp01((t - 0.42) / 0.22));                            // 見逃しも同じように引き、そのあと構えに戻る
@@ -190,7 +192,7 @@ function poseAt(pitch, t) {
       }
       P.hw = lerp(30, 10, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
       P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
-      P.footF = [FOOT_F0[0] - 14, GROUND_Y]; P.lean = lerp(-3, 0, f);
+      P.footF = [strideX, GROUND_Y]; P.lean = lerp(-3, 0, f);
       P.headDx = lerp(-4, -10, f);
     }
   }
