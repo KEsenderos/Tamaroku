@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.7）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.8）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -775,10 +775,17 @@ function buildMarkButtons(p) {
   const lastSeq = R.pitches.length ? R.pitches[R.pitches.length - 1].seq : 0;
   const pa = R.pas.find(function (a) { return a.id === p.paId; });
   const paMax = R.pitches.filter(function (x) { return x.paId === p.paId; }).reduce(function (m, x) { return Math.max(m, x.paSeq); }, 0);
-  return el('div', { class: 'btn-row wrap marks' }, MARK_ORDER.filter(function (m) {
+  const avail = MARK_ORDER.filter(function (m) {
+    if (p.marks.indexOf(m) >= 0) return true;                                      // すでに付いている印は、外せるように出す
     if (m === 'CAUGHT_OUT') return p.result === 'FOUL' && p.paSeq === paMax && pa && (pa.endType === null || pa.endType === 'CAUGHT_FOUL') && (p.seq === lastSeq);
+    if (m === 'NICE_PLAY') return p.result === 'INPLAY' || p.result === 'FOUL';       // 好守：打球があった球だけ
+    if (BUNT_MARKS.indexOf(m) >= 0) return p.result === 'INPLAY' && !!p.inplay && p.inplay.kind === 'BUNT';   // バントの種類：バントで転がした球だけ
+    if (m === 'DROPPED_K') return pa && pa.endType === 'K' && p.paSeq === paMax && (p.result === 'MISS' || (p.result === 'TAKEN' && p.takenCall === 'S'));   // 振り逃げ：三振の球だけ
+    if (m === 'IBB') return pa && pa.endType === 'BB' && p.paSeq === paMax && p.result === 'TAKEN';                                        // 敬遠：四球の球だけ
     return true;
-  }).map(function (m) {
+  });
+  if (avail.length === 0) return el('p', { class: 'sub tiny', text: 'この球に付けられる印はありません' });
+  return el('div', { class: 'btn-row wrap marks' }, avail.map(function (m) {
     const on = p.marks.indexOf(m) >= 0;
     return el('button', { type: 'button', class: 'btn small' + (on ? ' on' : ''), 'data-mark': m, 'aria-pressed': on ? 'true' : 'false', text: MARK_LABEL[m], onclick: function () { addMark(p.id, m); } });
   }));

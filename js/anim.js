@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.7）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.8）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -23,13 +23,13 @@ function cellCenter(row, col) { return [ZX0 + ZCELL * (col - 0.5), ZY0 + ZCELL *
 // 投手から見た絵。右打者は、ゾーンの右側（三塁側）に立ち、体はホームベース（画面の左）へ向け、顔は投手（こちら）へ向ける。
 // バットは、うしろの肩（画面の右）の上に構える。骨格（肩・ひじ・手・腰・ひざ・足）を計算して、1コマずつ描く。
 const CX = 290, HIPY = 192, HEAD_R = 16, ARM1 = 48, ARM2 = 46, LEG1 = 56, LEG2 = 56;
-const FOOT_F0 = [254, GROUND_Y], FOOT_B0 = [322, GROUND_Y];
+const FOOT_F0 = [262, GROUND_Y], FOOT_B0 = [318, GROUND_Y];   // 立ち幅（両足の間）を、少しせまく
 const HAND_READY = [308, 96];                   // 構えたときの手の位置（うしろの耳のあたり）
 const BAT_READY = [-0.08, -1];                  // 構えたときのバットの向き（ほぼ真上）
-const LOAD_HAND = [HAND_READY[0] + 10, HAND_READY[1] - 6];   // テイクバック：手を後ろ（うしろの肩のほう）へ引く
-const LOAD_BAT = [0.2, -1];                      // テイクバック：バットが少しうしろへ寝る
-const LOAD_HW = 18, LOAD_LEAN = 4;               // テイクバック：肩を入れて（ひねって）、体をわずかに後ろへ引く
-const COIL_HAND = [LOAD_HAND[0] + 9, LOAD_HAND[1] - 3], COIL_BAT = [0.36, -1], COIL_HW = 13, COIL_LEAN = 8;   // 打ちにいく直前の、もうひと引き（反動をためる）
+const LOAD_HAND = [HAND_READY[0] + 5, HAND_READY[1] - 3];   // テイクバック：手を後ろ（うしろの肩のほう）へ引く
+const LOAD_BAT = [0.1, -1];                      // テイクバック：バットが少しうしろへ寝る
+const LOAD_HW = 21, LOAD_LEAN = 2;               // テイクバック：肩を入れて（ひねって）、体をわずかに後ろへ引く
+const COIL_HAND = [LOAD_HAND[0] + 4, LOAD_HAND[1] - 2], COIL_BAT = [0.18, -1], COIL_HW = 18, COIL_LEAN = 4;   // 打ちにいく直前の、もうひと引き（反動をためる）
 const T_SWING = 0.36;                            // スイングを始める時間（それまでが、足上げとテイクバック）
 
 function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見た絵（図ぜんたいを左右反転。振り返り用）
@@ -127,11 +127,12 @@ function poseAt(pitch, t) {
   P.footF = [lerp(FOOT_F0[0], FOOT_F0[0] - 14, stride), GROUND_Y - 26 * lift];
   const loadIn = easeOut(clamp01((t - 0.08) / 0.18));                                        // 引く（t 0.08〜0.26）
   const swing = isSwing(pitch);
-  const loadK = swing ? loadIn : loadIn * 0.6 * (1 - easeIn(clamp01((t - 0.34) / 0.22)));    // 見逃しは、小さく引いて、戻る
+  const back = swing ? 1 : 1 - easeIn(clamp01((t - 0.42) / 0.22));                            // 見逃しも同じように引き、そのあと構えに戻る
+  const loadK = loadIn * back;
   P.hand = [lerp(HAND_READY[0], LOAD_HAND[0], loadK), lerp(HAND_READY[1], LOAD_HAND[1], loadK)];
   P.bat = [lerp(BAT_READY[0], LOAD_BAT[0], loadK), lerp(BAT_READY[1], LOAD_BAT[1], loadK)];
   P.hw = lerp(24, LOAD_HW, loadK); P.lean = LOAD_LEAN * loadK;
-  const coilK = swing ? easeOut(clamp01((t - 0.26) / 0.10)) : 0;                            // 打ちにいく直前、さらに少し後ろへ（t 0.26〜0.36）
+  const coilK = easeOut(clamp01((t - 0.26) / 0.10)) * back;                            // 打ちにいく直前、さらに少し後ろへ（t 0.26〜0.36）
   if (coilK > 0) {
     P.hand = [lerp(LOAD_HAND[0], COIL_HAND[0], coilK), lerp(LOAD_HAND[1], COIL_HAND[1], coilK)];
     P.bat = [lerp(LOAD_BAT[0], COIL_BAT[0], coilK), lerp(LOAD_BAT[1], COIL_BAT[1], coilK)];
@@ -161,12 +162,20 @@ function poseAt(pitch, t) {
       P.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, k), GROUND_Y - 5 * k];                    // うしろの足のかかとが上がる
       P.headDx = lerp(-2, -4, k);
     } else {
-      const f = easeOut((tau - 0.6) / 0.4);
-      const Vc = [Math.cos(aC), Math.sin(aC)], Vm = [0, -0.5], Vf = [0.82, -0.57];          // 当たったあと、バットは前を回って、うしろの肩へ巻く
-      const q = function (i) { return (1 - f) * (1 - f) * Vc[i] + 2 * (1 - f) * f * Vm[i] + f * f * Vf[i]; };
-      P.bat = [q(0), q(1)];
-      P.hand = [lerp(hx, 256, f), lerp(hy, 104, f)];
-      P.hw = lerp(30, 14, f); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
+      const f = clamp01((t - T_HIT) / 0.26);                                                 // 当たったあと（t 0.57〜0.83）
+      const Vc = [Math.cos(aC), Math.sin(aC)], Vk = [-0.78, -0.62], Vm = [0, -1], Vf = [0.82, -0.57];
+      const nz = function (v) { const l = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1; return [v[0] / l, v[1] / l]; };
+      if (f < 0.4) {                                                                         // ①打ったあとも、バットは前（ゾーン側）へ振り抜く
+        const u = easeOut(f / 0.4);
+        P.bat = nz([lerp(Vc[0], Vk[0], u), lerp(Vc[1], Vk[1], u)]);
+        P.hand = [lerp(hx, hx - 8, u), lerp(hy, hy - 6, u)];
+      } else {                                                                               // ②そのあと、頭の上を回って、うしろの肩へ巻く
+        const w = easeOut((f - 0.4) / 0.6);
+        const q = function (i) { return (1 - w) * (1 - w) * Vk[i] + 2 * (1 - w) * w * Vm[i] + w * w * Vf[i]; };
+        P.bat = nz([q(0), q(1)]);
+        P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
+      }
+      P.hw = lerp(30, 14, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
       P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
       P.footF = [FOOT_F0[0] - 14, GROUND_Y]; P.lean = lerp(-3, 0, f);
       P.headDx = lerp(-4, -10, f);

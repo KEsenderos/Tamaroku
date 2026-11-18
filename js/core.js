@@ -1,6 +1,6 @@
 'use strict';
-// kyr-core.js（サンプル。仕様書 v0.1.7 の10章。この通りに実装すること）
-const KYR_CORE_VERSION = '0.1.7';
+// kyr-core.js（サンプル。仕様書 v0.1.8 の10章。この通りに実装すること）
+const KYR_CORE_VERSION = '0.1.8';
 const DAY_START_HOUR = 5;            // 1日の区切り（午前5時）。4-9
 const MIN_SAMPLE_REFERENCE = 5;      // 「参考程度」と添える球数のしきい値
 const NAME_SUGGEST_MAX = 30;         // 名前の候補の最大件数（投手・打者それぞれ。5.2）
