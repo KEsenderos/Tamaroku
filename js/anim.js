@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.4）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.5）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -27,20 +27,21 @@ const FOOT_F0 = [254, GROUND_Y], FOOT_B0 = [322, GROUND_Y];
 const HAND_READY = [308, 96];                   // 構えたときの手の位置（うしろの耳のあたり）
 const BAT_READY = [-0.08, -1];                  // 構えたときのバットの向き（ほぼ真上）
 
-function drawSilhouette(svg, side) {
+function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見た絵（図ぜんたいを左右反転。振り返り用）
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   svg.setAttribute('viewBox', '-30 -22 380 322');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', '打者のシルエットとコース');
+  const root = svgNode('g', { transform: mirror ? 'translate(320,0) scale(-1,1)' : '' });
   const zone = svgNode('g', { 'class': 'sil-zone' });
   for (let r = 1; r <= 5; r++) for (let c = 1; c <= 5; c++) {
     zone.appendChild(svgNode('rect', { x: ZX0 + ZCELL * (c - 1), y: ZY0 + ZCELL * (r - 1), width: ZCELL, height: ZCELL, 'class': isStrikeZone(r, c) ? 'sz-in' : 'sz-out' }));
   }
   zone.appendChild(svgNode('rect', { x: ZX0 + ZCELL, y: ZY0 + ZCELL, width: ZCELL * 3, height: ZCELL * 3, 'class': 'sz-strike' }));
-  svg.appendChild(zone);
+  root.appendChild(zone);
   const cellHit = svgNode('rect', { width: ZCELL, height: ZCELL, 'class': 'sz-hit', opacity: 0 });
-  svg.appendChild(cellHit);
-  svg.appendChild(svgNode('line', { x1: 20, y1: GROUND_Y + 6, x2: 300, y2: GROUND_Y + 6, 'class': 'sil-ground' }));
+  root.appendChild(cellHit);
+  root.appendChild(svgNode('line', { x1: 20, y1: GROUND_Y + 6, x2: 300, y2: GROUND_Y + 6, 'class': 'sil-ground' }));
   const body = svgNode('g', { transform: side === 'L' ? 'translate(320,0) scale(-1,1)' : '' });
   const mk = function (tag, cls, extra) { const e = svgNode(tag, Object.assign({ 'class': cls }, extra || {})); return e; };
   const legB = mk('path', 'sil-limb', { 'stroke-width': 17 }), legF = mk('path', 'sil-limb', { 'stroke-width': 17 });
@@ -55,12 +56,13 @@ function drawSilhouette(svg, side) {
   const batH = mk('polygon', 'sil-halo-fill', { points: '' }), bat = mk('polygon', 'sil-fill', { points: '' });
   [torso, neck, head, brim, armBh, armB, armFh, armF, batH, bat].forEach(function (e) { lean.appendChild(e); });
   [legB, legF, footB, footF, lean].forEach(function (e) { body.appendChild(e); });
-  svg.appendChild(body);
+  root.appendChild(body);
   const mitt = svgNode('ellipse', { rx: 17, ry: 13, 'class': 'sil-mitt', opacity: 0 });
   const impact = svgNode('polygon', { points: '', 'class': 'sil-impact', opacity: 0 });
   const ball = svgNode('circle', { r: 3, 'class': 'sil-ball', opacity: 0 });
-  svg.appendChild(mitt); svg.appendChild(impact); svg.appendChild(ball);
-  const parts = { svg: svg, side: side, body: body, lean: lean, legB: legB, legF: legF, footB: footB, footF: footF, torso: torso, neck: neck, head: head, brim: brim,
+  root.appendChild(mitt); root.appendChild(impact); root.appendChild(ball);
+  svg.appendChild(root);
+  const parts = { svg: svg, side: side, mirror: !!mirror, body: body, lean: lean, legB: legB, legF: legF, footB: footB, footF: footF, torso: torso, neck: neck, head: head, brim: brim,
     armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);

@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.4）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.5）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {

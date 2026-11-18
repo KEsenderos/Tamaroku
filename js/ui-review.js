@@ -1,5 +1,5 @@
 'use strict';
-// ui-review.js（球録 v0.1.4）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
+// ui-review.js（球録 v0.1.5）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
 // 表示するだけで、「次はこの球」「待っている球」のような予想は出さない
 
 const RV = {
@@ -141,7 +141,7 @@ function buildPlay() {
   RV.play = { svg: svg, field: field, fdWrap: fdWrap, info: info, next: next, prev: prev, again: again, first: first };
   const firstPa = RV.list.length ? rvPaOf(RV.list[0]) : null;
   const curPaObj = RV.idx >= 0 && RV.list[RV.idx] ? rvPaOf(RV.list[RV.idx]) : null;
-  drawSilhouette(svg, curPaObj ? curPaObj.side : (firstPa ? firstPa.side : 'R'));
+  drawSilhouette(svg, curPaObj ? curPaObj.side : (firstPa ? firstPa.side : 'R'), true);
   drawField(field);
   const box = el('div', { class: 'play' }, [
     el('div', { class: 'stage' }, [svg, fdWrap]),
@@ -167,7 +167,7 @@ function rvShow(animate) {
   if (i < 0) {
     inf.type.textContent = '「次の球」を押すと、1球ずつ再生します'; inf.react.textContent = ''; inf.react.className = 'rv-react';
     inf.who.textContent = '全 ' + n + ' 球'; inf.after.textContent = '';
-    drawSilhouette(pl.svg, (RV.list[0] && rvPaOf(RV.list[0])) ? rvPaOf(RV.list[0]).side : 'R'); drawField(pl.field);
+    drawSilhouette(pl.svg, (RV.list[0] && rvPaOf(RV.list[0])) ? rvPaOf(RV.list[0]).side : 'R', true); drawField(pl.field);
     return;
   }
   const p = RV.list[i]; const pa = rvPaOf(p); const side = pa ? pa.side : 'R';
@@ -176,8 +176,8 @@ function rvShow(animate) {
   inf.react.className = 'rv-react rr-' + p.result;
   inf.who.textContent = '第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　' + p.paSeq + '球目　B' + p.sit.balls + ' S' + p.sit.strikes + 'から　' + (i + 1) + '/' + n + '球';
   inf.after.textContent = afterText(p, pa) + (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
-  if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side); }
-  pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-left' : 'at-right') : 'off');
+  if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side, true); }
+  pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-right' : 'at-left') : 'off');
   playMotion(pl.svg, p, { field: pl.field });
 }
 
@@ -210,7 +210,8 @@ function drawZoneChart(pitches, side, compact) {
   const byCell = {};
   pitches.forEach(function (p) { const k = p.row + '-' + p.col; (byCell[k] = byCell[k] || []).push(p); });
   const cells = [];
-  for (let r = 1; r <= 5; r++) for (let c = 1; c <= 5; c++) {
+  for (let r = 1; r <= 5; r++) for (let cc = 1; cc <= 5; cc++) {
+    const c = 6 - cc;                                  // 捕手から見た図：左右を反転して並べる
     const list = byCell[r + '-' + c] || [];
     const shown = list.slice(0, 6).map(function (p) {
       const ti = typeInfo(p.pitchType);
@@ -219,14 +220,14 @@ function drawZoneChart(pitches, side, compact) {
     if (list.length > 6) shown.push(el('span', { class: 'zmore', text: '×' + list.length }));
     cells.push(el('div', { class: 'zc ' + (isStrikeZone(r, c) ? 'in' : 'out') }, shown));
   }
-  const cap = side ? el('p', { class: 'zone-cap ' + (side === 'R' ? 'right' : 'left'), text: side === 'R' ? '内角側 ▶' : '◀ 内角側' }) : null;
+  const cap = side ? el('p', { class: 'zone-cap ' + (side === 'R' ? 'left' : 'right'), text: side === 'R' ? '◀ 内角側' : '内角側 ▶' }) : null;
   return el('div', { class: 'zchart' + (compact ? ' compact' : '') }, [cap, el('div', { class: 'zgrid' }, cells)]);
 }
 function buildZoneView() {
   const sides = new Set(RV.list.map(function (p) { const a = rvPaOf(p); return a ? a.side : 'R'; }));
   const side = sides.size === 1 ? Array.from(sides)[0] : null;      // 左右が混ざるときは、内角側の表示を出さない
   return el('div', { class: 'card', id: 'rv-zone' }, [
-    el('h2', { text: 'ゾーン図（投手から見て）' }),
+    el('h2', { text: 'ゾーン図（捕手から見て）' }),
     side ? null : el('p', { class: 'sub', text: '右打席と左打席が混ざっています。絞り込みの「打席の左右」で分けられます。' }),
     drawZoneChart(RV.list, side, false),
     el('p', { class: 'sub', text: '点の色と文字は球種。外枠：見逃し＝細い実線／空振り＝二重線／ファウル＝点線／インプレー＝太い実線／死球＝破線' })
@@ -253,8 +254,8 @@ function buildTendency(pitches, filter) {
   // ② 25マス
   const zc = {}; pitches.forEach(function (p) { const k = p.row + '-' + p.col; zc[k] = (zc[k] || 0) + 1; });
   const zrows = [];
-  for (let r = 1; r <= 5; r++) { const row = [V_LABEL[r]]; for (let c = 1; c <= 5; c++) row.push(zc[r + '-' + c] || 0); zrows.push(row); }
-  box.appendChild(el('h3', { text: '② 25マスごとの回数（投手から見て・左が1列目）' }));
+  for (let r = 1; r <= 5; r++) { const row = [V_LABEL[r]]; for (let cc = 1; cc <= 5; cc++) row.push(zc[r + '-' + (6 - cc)] || 0); zrows.push(row); }
+  box.appendChild(el('h3', { text: '② 25マスごとの回数（捕手から見て・左が1列目）' }));
   box.appendChild(tableOf(['', '1列', '2列', '3列', '4列', '5列'], zrows));
   // ③ 結果
   const rc = {}; pitches.forEach(function (p) { rc[p.result] = (rc[p.result] || 0) + 1; });
