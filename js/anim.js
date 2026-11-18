@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.6）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.7）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -29,6 +29,7 @@ const BAT_READY = [-0.08, -1];                  // 構えたときのバット�
 const LOAD_HAND = [HAND_READY[0] + 10, HAND_READY[1] - 6];   // テイクバック：手を後ろ（うしろの肩のほう）へ引く
 const LOAD_BAT = [0.2, -1];                      // テイクバック：バットが少しうしろへ寝る
 const LOAD_HW = 18, LOAD_LEAN = 4;               // テイクバック：肩を入れて（ひねって）、体をわずかに後ろへ引く
+const COIL_HAND = [LOAD_HAND[0] + 9, LOAD_HAND[1] - 3], COIL_BAT = [0.36, -1], COIL_HW = 13, COIL_LEAN = 8;   // 打ちにいく直前の、もうひと引き（反動をためる）
 const T_SWING = 0.36;                            // スイングを始める時間（それまでが、足上げとテイクバック）
 
 function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見た絵（図ぜんたいを左右反転。振り返り用）
@@ -130,6 +131,12 @@ function poseAt(pitch, t) {
   P.hand = [lerp(HAND_READY[0], LOAD_HAND[0], loadK), lerp(HAND_READY[1], LOAD_HAND[1], loadK)];
   P.bat = [lerp(BAT_READY[0], LOAD_BAT[0], loadK), lerp(BAT_READY[1], LOAD_BAT[1], loadK)];
   P.hw = lerp(24, LOAD_HW, loadK); P.lean = LOAD_LEAN * loadK;
+  const coilK = swing ? easeOut(clamp01((t - 0.26) / 0.10)) : 0;                            // 打ちにいく直前、さらに少し後ろへ（t 0.26〜0.36）
+  if (coilK > 0) {
+    P.hand = [lerp(LOAD_HAND[0], COIL_HAND[0], coilK), lerp(LOAD_HAND[1], COIL_HAND[1], coilK)];
+    P.bat = [lerp(LOAD_BAT[0], COIL_BAT[0], coilK), lerp(LOAD_BAT[1], COIL_BAT[1], coilK)];
+    P.hw = lerp(LOAD_HW, COIL_HW, coilK); P.lean = lerp(LOAD_LEAN, COIL_LEAN, coilK);
+  }
   const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
   const bunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
   if (isSwing(pitch)) {
@@ -139,18 +146,18 @@ function poseAt(pitch, t) {
     let ddx = tx - hx, ddy = ty - hy; const dl = Math.sqrt(ddx * ddx + ddy * ddy);
     if (dl < 8) { ddx = -1; ddy = 0; } else { ddx /= dl; ddy /= dl; }
     const tau = clamp01((t - T_SWING) / 0.35);
-    const aR = Math.atan2(LOAD_BAT[1], LOAD_BAT[0]);                                       // 約 -95°
+    const aR = Math.atan2(COIL_BAT[1], COIL_BAT[0]);                                       // 約 -95°
     let aC = Math.atan2(ddy, ddx); if (aC > 0) aC -= Math.PI * 2;                           // 上から左へ回って当たる向き
     if (bunt) {
       const k = easeOut(tau / 0.5);
-      P.hand = [lerp(LOAD_HAND[0], hx + 6, k), lerp(LOAD_HAND[1], hy, k)]; P.lean = LOAD_LEAN * (1 - k);
+      P.hand = [lerp(COIL_HAND[0], hx + 6, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
       const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
-      P.hw = lerp(LOAD_HW, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
+      P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
     } else if (tau < 0.6) {
       const k = easeIn(tau / 0.6);
-      P.hand = [lerp(LOAD_HAND[0], hx, k), lerp(LOAD_HAND[1], hy, k)]; P.lean = LOAD_LEAN * (1 - k);
+      P.hand = [lerp(COIL_HAND[0], hx, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
       const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
-      P.hw = lerp(LOAD_HW, 30, k); P.shF = lerp(118, 112, k); P.shB = lerp(112, 124, k);
+      P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 112, k); P.shB = lerp(112, 124, k);
       P.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, k), GROUND_Y - 5 * k];                    // うしろの足のかかとが上がる
       P.headDx = lerp(-2, -4, k);
     } else {
@@ -161,7 +168,7 @@ function poseAt(pitch, t) {
       P.hand = [lerp(hx, 256, f), lerp(hy, 104, f)];
       P.hw = lerp(30, 14, f); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
       P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
-      P.footF = [FOOT_F0[0] - 14, GROUND_Y]; P.lean = 0;
+      P.footF = [FOOT_F0[0] - 14, GROUND_Y]; P.lean = lerp(-3, 0, f);
       P.headDx = lerp(-4, -10, f);
     }
   }

@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.6）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.7）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -469,21 +469,36 @@ async function startPa(batterId) {
   R.pas.push(pa); R.game.liveSit = nl; R.state = 'AWAIT_RESULT'; R.draft = null; R.emphasize = false; R.selectedPitchId = null;
   renderRecord();
 }
+// いまのカウントで「あり得る手」だけを出す。3ボールのボールは四球、2ストライクのストライクは三振になる（3ストライク・4ボールの状態はない）
+function resultChoices() {
+  const live = R.game ? R.game.liveSit : null;
+  const b = live ? live.balls : 0, st = live ? live.strikes : 0;
+  return [
+    { result: 'TAKEN', call: 'B', label: b >= 3 ? '四球' : 'ボール', cls: 'res-TAKEN' },
+    { result: 'TAKEN', call: 'S', label: st >= 2 ? '見逃し三振' : '見逃し', cls: 'res-TAKEN' },
+    { result: 'MISS', call: null, label: st >= 2 ? '空振り三振' : '空振り', cls: 'res-MISS' },
+    { result: 'FOUL', call: null, label: 'ファウル', cls: 'res-FOUL' },
+    { result: 'HBP', call: null, label: '死球', cls: 'res-HBP' },
+    { result: 'INPLAY', call: null, label: 'インプレー', cls: 'res-INPLAY' }
+  ];
+}
 function buildResultBar() {
   const on = R.state === 'AWAIT_RESULT' || R.state === 'AWAIT_ZONE';
-  const sel = R.draft ? R.draft.result : null;
+  const sel = R.draft ? R.draft.result : null, selCall = R.draft ? R.draft.takenCall : null;
   return el('div', { id: 'result-bar', class: 'card' }, [
-    el('div', { class: 'btn-row wrap' }, RESULT_ORDER.map(function (r) {
-      return el('button', { type: 'button', class: 'btn res res-' + r + (sel === r ? ' on' : ''), 'data-result': r, disabled: !on, 'aria-pressed': sel === r ? 'true' : 'false', text: RESULT_LABEL[r], onclick: function () { onResultTap(r); } });
+    el('div', { class: 'btn-row wrap' }, resultChoices().map(function (c) {
+      const isOn = sel === c.result && (c.result !== 'TAKEN' || selCall === c.call);
+      return el('button', { type: 'button', class: 'btn res ' + c.cls + (isOn ? ' on' : ''), 'data-result': c.result, 'data-call': c.call || '', disabled: !on, 'aria-pressed': isOn ? 'true' : 'false', text: c.label, onclick: function () { onResultTap(c.result, c.call); } });
     }))
   ]);
 }
-function onResultTap(r) {
+function onResultTap(r, call) {
   if (R.isSaving) return;
   if (R.state !== 'AWAIT_RESULT' && R.state !== 'AWAIT_ZONE') return;
   if (typeof awakeTouch === 'function') awakeTouch();
   if (!R.draft) R.draft = { pitchId: newId('p', Date.now(), Math.random()) };       // 球のIDは、入力を始めた時点で1つ作る
   R.draft.result = r;
+  R.draft.takenCall = (r === 'TAKEN') ? call : undefined;                            // 見逃しのボール・ストライクは、押したボタンで決まる
   R.state = 'AWAIT_ZONE';
   renderRecord();
 }
@@ -514,7 +529,6 @@ function onZoneTap(row, col) {
   if (R.state !== 'AWAIT_ZONE' && R.state !== 'AWAIT_TYPE') return;
   if (typeof awakeTouch === 'function') awakeTouch();
   R.draft.row = row; R.draft.col = col;
-  if (R.draft.result === 'TAKEN') R.draft.takenCall = takenCallFromZone(row, col);
   R.state = 'AWAIT_TYPE';
   renderRecord();
 }
