@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.9）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.10）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -512,7 +512,7 @@ function onResultTap(r, call) {
 function batterFigure(side) {
   if (!side) return null;
   const svg = document.createElementNS(SVGNS, 'svg');
-  svg.setAttribute('class', 'zone-batter');
+  svg.setAttribute('class', 'zone-batter ' + (side === 'L' ? 'l' : 'r'));
   drawBatterOnly(svg, side);
   return svg;
 }
@@ -532,7 +532,7 @@ function buildZone() {
   const cap = side ? el('p', { class: 'zone-cap ' + (side === 'R' ? 'right' : 'left'), text: side === 'R' ? '内角側 ▶' : '◀ 内角側' }) : null;
   return el('div', { class: 'card' }, [
     el('h2', { text: 'コース（投手から見て）' }),
-    el('div', { class: 'zone-row' + (side === 'L' ? ' left' : '') }, [el('div', { class: 'zone-col' }, [cap, el('div', { id: 'zone-grid', class: 'zone' }, rows)]), batterFigure(side)]),
+    cap, el('div', { class: 'zone-stage' }, [el('div', { id: 'zone-grid', class: 'zone' }, rows), batterFigure(side)]),
     (d && d.result === 'TAKEN' && d.row) ? el('div', { class: 'btn-row' }, [
       el('span', { id: 'taken-call', text: '判定：' + (d.takenCall === 'S' ? 'ストライク' : 'ボール') }),
       el('button', { type: 'button', class: 'btn small', id: 'taken-flip', text: '判定を逆にする', onclick: function () { if (R.isSaving) return; d.takenCall = (d.takenCall === 'S') ? 'B' : 'S'; renderRecord(); } })

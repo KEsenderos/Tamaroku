@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.9）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.10）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -59,7 +59,8 @@ function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見�
   const armBh = mk('path', 'sil-halo', { 'stroke-width': 17 }), armB = mk('path', 'sil-limb', { 'stroke-width': 12 });
   const armFh = mk('path', 'sil-halo', { 'stroke-width': 17 }), armF = mk('path', 'sil-limb', { 'stroke-width': 12 });
   const batH = mk('polygon', 'sil-halo-fill', { points: '' }), bat = mk('polygon', 'sil-fill', { points: '' });
-  [torso, neck, head, brim, armBh, armB, armFh, armF, batH, bat].forEach(function (e) { lean.appendChild(e); });
+  const gripA = mk('circle', 'sil-grip', { r: 7.5 }), gripB = mk('circle', 'sil-grip', { r: 7 });        // バットを握る両手（こぶし）
+  [torso, neck, head, brim, armBh, armB, armFh, armF, batH, bat, gripA, gripB].forEach(function (e) { lean.appendChild(e); });
   [legB, legF, footB, footF, lean].forEach(function (e) { body.appendChild(e); });
   root.appendChild(body);
   const mitt = svgNode('ellipse', { rx: 17, ry: 13, 'class': 'sil-mitt', opacity: 0 });
@@ -68,7 +69,7 @@ function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見�
   root.appendChild(mitt); root.appendChild(impact); root.appendChild(ball);
   svg.appendChild(root);
   const parts = { svg: svg, side: side, mirror: !!mirror, body: body, lean: lean, legB: legB, legF: legF, footB: footB, footF: footF, torso: torso, neck: neck, head: head, brim: brim,
-    armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
+    armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, gripA: gripA, gripB: gripB, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);
   return parts;
@@ -112,6 +113,8 @@ function setBat(parts, px, py, vx, vy) {
       [T[0] - nx * (6 + grow), T[1] - ny * (6 + grow)], [H[0] - nx * (3.5 + grow), H[1] - ny * (3.5 + grow)], [K[0] - nx * (2.5 + grow), K[1] - ny * (2.5 + grow)]
     ]);
   };
+  parts.gripA.setAttribute('cx', (px + dx * 2).toFixed(1)); parts.gripA.setAttribute('cy', (py + dy * 2).toFixed(1));
+  parts.gripB.setAttribute('cx', (px + dx * 10).toFixed(1)); parts.gripB.setAttribute('cy', (py + dy * 10).toFixed(1));
   parts.bat.setAttribute('points', mkPoly(0));
   parts.batH.setAttribute('points', mkPoly(2.5));
 }
@@ -185,7 +188,7 @@ function poseAt(pitch, t) {
         P.bat = nz([q(0), q(1)]);
         P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
       }
-      P.hw = lerp(30, 14, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
+      P.hw = lerp(30, 10, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
       P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
       P.footF = [FOOT_F0[0] - 14, GROUND_Y]; P.lean = lerp(-3, 0, f);
       P.headDx = lerp(-4, -10, f);
@@ -244,8 +247,10 @@ function applyPose(parts, P) {
   const behind = !!P.batBehind;                                              // バットを、体（胴・首・頭）より奥に描くか
   if (parts._behind !== behind) {
     parts._behind = behind;
-    if (behind) { parts.lean.insertBefore(parts.batH, parts.lean.firstChild); parts.lean.insertBefore(parts.bat, parts.torso); }
-    else { parts.lean.appendChild(parts.batH); parts.lean.appendChild(parts.bat); }
+    const order = behind                                                      // 巻いたあとは、投手側の腕とバットが、胴・首・頭のうしろに入る
+      ? [parts.armFh, parts.armF, parts.batH, parts.bat, parts.torso, parts.neck, parts.head, parts.brim, parts.armBh, parts.armB, parts.gripA, parts.gripB]
+      : [parts.torso, parts.neck, parts.head, parts.brim, parts.armBh, parts.armB, parts.armFh, parts.armF, parts.batH, parts.bat, parts.gripA, parts.gripB];
+    order.forEach(function (e) { parts.lean.appendChild(e); });
   }
   const FS = [CX - P.hw, P.shF], BS = [CX + P.hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
   const hipF = [CX - 14, HIPY], hipB = [CX + 14, HIPY];
