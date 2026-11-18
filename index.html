@@ -27,10 +27,12 @@
   <p id="global-msg" class="notice error" role="alert" hidden></p>
   <main>
     <section class="tab-panel" id="panel-record" aria-label="記録"></section>
+    <section class="tab-panel" id="panel-review" aria-label="振り返り" hidden></section>
     <section class="tab-panel" id="panel-settings" aria-label="設定" hidden></section>
   </main>
   <nav id="tab-bar" aria-label="タブ">
     <button type="button" class="tab-btn on" data-tab="record" aria-selected="true">記録</button>
+    <button type="button" class="tab-btn" data-tab="review" aria-selected="false">振り返り</button>
     <button type="button" class="tab-btn" data-tab="settings" aria-selected="false">設定</button>
   </nav>
 </div>
@@ -40,7 +42,9 @@
 <script src="js/core.js"></script>
 <script src="js/db.js"></script>
 <script src="js/awake.js"></script>
+<script src="js/anim.js"></script>
 <script src="js/ui-record.js"></script>
+<script src="js/ui-review.js"></script>
 <script src="js/ui-settings.js"></script>
 <script src="js/app.js"></script>
 </body>

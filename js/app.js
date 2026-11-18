@@ -1,10 +1,10 @@
 'use strict';
-// app.js（球録 v0.1.3）起動・タブの切り替え・更新ボタン・サービスワーカーの登録
+// app.js（球録 v0.1.4）起動・タブの切り替え・更新ボタン・サービスワーカーの登録
 let currentTab = 'record';
 let swRegistration = null;
 let lastUpdateCheck = 0;
 let updateRequested = false;      // ボタンが押されたときだけ true（初回の起動で読み込み直さないため）
-const TAB_IDS = ['record', 'settings'];     // 段階1（6.4）。段階2で 'review' を足す
+const TAB_IDS = ['record', 'review', 'settings'];     // 段階2・3で 'review' を足した（6.4）
 
 function switchTab(tabId) {
   if (TAB_IDS.indexOf(tabId) < 0) tabId = 'record';
@@ -17,6 +17,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(function (p) { p.hidden = (p.id !== 'panel-' + tabId); });
   try { localStorage.setItem(LS_LAST_TAB, tabId); } catch (e) { /* 何もしない */ }
   if (tabId === 'settings') renderSettings();
+  if (tabId === 'review') renderReview();
   if (typeof awakeRefresh === 'function') awakeRefresh();
   window.scrollTo(0, 0);
 }
@@ -105,5 +106,6 @@ async function appStart() {
     if (document.visibilityState === 'visible') openDb().catch(function (e) { R.dbError = e; renderRecord(); });
   });
   if (tab === 'settings') renderSettings();
+  if (tab === 'review') renderReview();
 }
 document.addEventListener('DOMContentLoaded', appStart);

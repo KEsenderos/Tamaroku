@@ -1,7 +1,7 @@
 'use strict';
-// constants.js（球録 v0.1.3・段階1）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
-const APP_VERSION = '0.1.3';
-const APP_STAGE = 1;                  // 1=記録・設定 / 2=振り返り / 3=シルエット（6.4）
+// constants.js（球録 v0.1.4・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
+const APP_VERSION = '0.1.4';
+const APP_STAGE = 3;                  // 1=記録・設定 / 2=振り返り / 3=シルエット（6.4）
 const SCHEMA_VERSION = 1;             // 保存の形の版
 const DB_NAME = 'kyr-db';
 const DB_VERSION = 1;                 // DBの版（保存の形の版とは別）
@@ -93,3 +93,20 @@ const MSG = {
   VERSION_CHANGE: '更新があります。開き直してください',
   NEWER_DB: '新しい版の記録です。アプリを更新してください'
 };
+
+// ---- 振り返り・シルエット（11章）----
+const MOTION_MS = 1200;              // 1球の動きの長さ（ミリ秒）
+// 野球場の図（SVGの座標 0〜100。本塁 (50,90)、中堅が上、左が三塁側）。方向18か所の行き先
+const FIELD_HOME = [50, 90];
+const FIELD_POINTS = {
+  P: [50, 70], C: [50, 84], '1B': [72, 68], '2B': [60, 54], '3B': [28, 68], SS: [40, 54],
+  LF: [20, 26], CF: [50, 14], RF: [80, 26],
+  '1B2B': [68, 60], '2BSS': [50, 52], '3BSS': [32, 60], LCF: [35, 17], RCF: [65, 17],
+  '1BL': [80, 60], '3BL': [20, 60], LFL: [6, 46], RFL: [94, 46]
+};
+const FOUL_POINTS = { F1B: [88, 80], F3B: [12, 80], FBK: [50, 99], FLN: [90, 50] };   // ファウルの行き先の目安
+const FLY_FACTOR = { FLY_SHALLOW: 0.75, FLY_MID: 1.0, FLY_DEEP: 1.18, FLY_INF: 0.55 };   // 本塁からの距離の倍率
+const BUNT_FACTOR = 0.45;
+const HR_FACTOR = 1.12;
+const COUNT_LIST = ['0-0', '1-0', '2-0', '3-0', '0-1', '1-1', '2-1', '3-1', '0-2', '1-2', '2-2', '3-2'];   // ボール-ストライク
+const REVIEW_VIEWS = [['play', '再生'], ['list', '一覧'], ['zone', 'ゾーン図'], ['trend', '傾向']];

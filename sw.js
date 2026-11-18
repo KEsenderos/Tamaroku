@@ -1,11 +1,11 @@
 'use strict';
-// sw.js（球録 v0.1.3）自分のサイトのファイルだけを覚える。更新ボタンが押されるまで、新しい版に切り替わらない
-const CACHE_VERSION = '0.1.3';
+// sw.js（球録 v0.1.4）自分のサイトのファイルだけを覚える。更新ボタンが押されるまで、新しい版に切り替わらない
+const CACHE_VERSION = '0.1.4';
 const CACHE_PREFIX = 'kyr-cache-';
 const CACHE_NAME = CACHE_PREFIX + 'v' + CACHE_VERSION;
 const PRECACHE = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/constants.js', 'js/core.js', 'js/db.js', 'js/awake.js', 'js/ui-record.js', 'js/ui-settings.js', 'js/app.js',
+  'js/constants.js', 'js/core.js', 'js/db.js', 'js/awake.js', 'js/anim.js', 'js/ui-record.js', 'js/ui-review.js', 'js/ui-settings.js', 'js/app.js',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-16.png', 'icons/favicon-32.png', 'icons/favicon-48.png'
 ];
 self.addEventListener('install', function (event) {
