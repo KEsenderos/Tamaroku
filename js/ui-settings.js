@@ -1,5 +1,5 @@
 'use strict';
-// ui-settings.js（球録 v0.1.8）設定タブ。確認の画面（kyrDialog）もここ
+// ui-settings.js（球録 v0.1.9）設定タブ。確認の画面（kyrDialog）もここ
 
 // 確認・案内の画面。buttons: [{label, value, primary}]。押したボタンの value で解決する。link: {href, name}（保存のリンク）
 function kyrDialog(opts) {

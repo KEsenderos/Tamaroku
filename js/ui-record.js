@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.8）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.9）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -59,6 +59,12 @@ function curPa() {
 }
 function curPitcher() { return R.game.pitchers[R.game.pitchers.length - 1]; }
 function paPitchCount(paId) { return R.pitches.filter(function (p) { return p.paId === paId; }).length; }
+// ボール（黄）・ストライク（緑）・アウト（赤）を、丸で出す。ついている数だけ塗りつぶす
+function bsoGroup(letter, kind, n, max) {
+  const kids = [el('span', { class: 'bso-l', text: letter })];
+  for (let i = 0; i < max; i++) kids.push(el('span', { class: 'bso-dot bso-' + kind + (i < n ? ' on' : '') }));
+  return el('span', { class: 'bso-g' }, kids);
+}
 function sitText(s) {
   return { inning: s.inning + '回' + (s.half === 'T' ? '表' : '裏'), count: 'B' + s.balls + ' S' + s.strikes, outs: s.outs + 'アウト' };
 }
@@ -325,8 +331,8 @@ function buildSituationBar() {
   }));
   const items = el('div', { class: 'sit-items' }, [
     el('button', { type: 'button', class: 'sit-item', id: 'sit-inning', disabled: !can, text: t.inning, onclick: toggle('inning') }),
-    el('button', { type: 'button', class: 'sit-item', id: 'sit-count', disabled: !(can && R.state === 'AWAIT_RESULT'), text: t.count, onclick: toggle('count') }),
-    el('button', { type: 'button', class: 'sit-item' + emph, id: 'sit-outs', disabled: !can, text: t.outs, onclick: toggle('outs') })
+    el('button', { type: 'button', class: 'sit-item', id: 'sit-count', 'aria-label': 'ボール' + s.balls + '　ストライク' + s.strikes, disabled: !(can && R.state === 'AWAIT_RESULT'), onclick: toggle('count') }, [bsoGroup('B', 'b', s.balls, 3), bsoGroup('S', 's', s.strikes, 2)]),
+    el('button', { type: 'button', class: 'sit-item' + emph, id: 'sit-outs', 'aria-label': s.outs + 'アウト', disabled: !can, onclick: toggle('outs') }, [bsoGroup('O', 'o', s.outs, 2)])
   ]);
   const bar = el('div', { id: 'situation-bar', class: 'card sit' }, [items, diamond]);
   const wrap = [bar];
@@ -502,6 +508,14 @@ function onResultTap(r, call) {
   R.state = 'AWAIT_ZONE';
   renderRecord();
 }
+// ゾーンのとなりに出す、対戦打者の絵（動かない。左右どちらの打席かが分かる）
+function batterFigure(side) {
+  if (!side) return null;
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('class', 'zone-batter');
+  drawBatterOnly(svg, side);
+  return svg;
+}
 function buildZone() {
   const pa = curPa();
   const side = pa ? pa.side : null;
@@ -517,7 +531,8 @@ function buildZone() {
   }
   const cap = side ? el('p', { class: 'zone-cap ' + (side === 'R' ? 'right' : 'left'), text: side === 'R' ? '内角側 ▶' : '◀ 内角側' }) : null;
   return el('div', { class: 'card' }, [
-    el('h2', { text: 'コース（投手から見て）' }), cap, el('div', { id: 'zone-grid', class: 'zone' }, rows),
+    el('h2', { text: 'コース（投手から見て）' }),
+    el('div', { class: 'zone-row' + (side === 'L' ? ' left' : '') }, [el('div', { class: 'zone-col' }, [cap, el('div', { id: 'zone-grid', class: 'zone' }, rows)]), batterFigure(side)]),
     (d && d.result === 'TAKEN' && d.row) ? el('div', { class: 'btn-row' }, [
       el('span', { id: 'taken-call', text: '判定：' + (d.takenCall === 'S' ? 'ストライク' : 'ボール') }),
       el('button', { type: 'button', class: 'btn small', id: 'taken-flip', text: '判定を逆にする', onclick: function () { if (R.isSaving) return; d.takenCall = (d.takenCall === 'S') ? 'B' : 'S'; renderRecord(); } })

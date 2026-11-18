@@ -1,5 +1,5 @@
 'use strict';
-// ui-review.js（球録 v0.1.8）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
+// ui-review.js（球録 v0.1.9）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
 // 表示するだけで、「次はこの球」「待っている球」のような予想は出さない
 
 const RV = {
@@ -28,6 +28,23 @@ function filterPitches(pitches, pas, batterId, f) {
     return true;
   });
 }
+
+// 球の番号の表記。1球目は「初球」（太字）。打席の結果が出た球は、太字にして色を付ける（凡退＝赤・四球＝緑・安打＝明るい青）
+const HIT_OUTCOMES = ['IH', 'H1', 'H2', 'H3', 'HR'], OUT_OUTCOMES = ['OUT', 'DP', 'SAC_BUNT', 'SAC_FLY'];
+function pitchNo(p, pa) {
+  const maxSeq = RV.pitches.filter(function (x) { return x.paId === p.paId; }).reduce(function (m, x) { return Math.max(m, x.paSeq); }, 0);
+  const last = !!pa && pa.endType && pa.endType !== 'SKIPPED' && p.paSeq === maxSeq;
+  let cls = 'pn' + (p.paSeq === 1 ? ' pn-first' : '');
+  if (last) {
+    cls += ' pn-end';
+    if (pa.endType === 'K' || pa.endType === 'CAUGHT_FOUL') cls += ' pn-out';
+    else if (pa.endType === 'BB') cls += ' pn-bb';
+    else if (pa.endType === 'INPLAY') { if (HIT_OUTCOMES.indexOf(pa.outcome) >= 0) cls += ' pn-hit'; else if (OUT_OUTCOMES.indexOf(pa.outcome) >= 0) cls += ' pn-out'; }
+  }
+  return el('span', { class: cls, text: p.paSeq === 1 ? '初球' : p.paSeq + '球目' });
+}
+function rvBso(balls, strikes) { return el('span', { class: 'rv-bso', 'aria-label': 'ボール' + balls + ' ストライク' + strikes }, [bsoGroup('B', 'b', balls, 3), bsoGroup('S', 's', strikes, 2)]); }
+function setKids(node, kids) { while (node.firstChild) node.removeChild(node.firstChild); kids.forEach(function (c) { if (c) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); }); }
 
 // 1球の説明（文字だけ。短く）
 function reactionText(p) {
@@ -174,8 +191,10 @@ function rvShow(animate) {
   inf.type.textContent = rvTypeName(p.pitchType) + '　' + zoneLabel(p.row, p.col, side);
   inf.react.textContent = reactionText(p) + ' ' + marksText(p);
   inf.react.className = 'rv-react rr-' + p.result;
-  inf.who.textContent = '第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　' + p.paSeq + '球目　B' + p.sit.balls + ' S' + p.sit.strikes + 'から　' + (i + 1) + '/' + n + '球';
-  inf.after.textContent = afterText(p, pa) + (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
+  setKids(inf.who, ['第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　', pitchNo(p, pa), '　', rvBso(p.sit.balls, p.sit.strikes), '　' + (i + 1) + '/' + n + '球']);
+  const aft = afterText(p, pa), tail = (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
+  const mm = /^B(\d) S(\d) になった$/.exec(aft);
+  if (mm) setKids(inf.after, [rvBso(Number(mm[1]), Number(mm[2])), ' になった' + tail]); else inf.after.textContent = aft + tail;
   if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side, true); }
   pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-right' : 'at-left') : 'off');
   playMotion(pl.svg, p, { field: pl.field });
@@ -186,7 +205,7 @@ function buildPitchList(filter) {
   const rows = [];
   RV.list.forEach(function (p, i) {
     const pa = rvPaOf(p);
-    let t = '#' + p.seq + '　第' + (pa ? pa.paNo : '?') + '打席 ' + p.paSeq + '球目　B' + p.sit.balls + ' S' + p.sit.strikes + '　' + rvTypeName(p.pitchType) + '　' + zoneLabel(p.row, p.col, pa ? pa.side : 'R') + '　' + RESULT_LABEL[p.result];
+    let t = '　' + rvTypeName(p.pitchType) + '　' + zoneLabel(p.row, p.col, pa ? pa.side : 'R') + '　' + RESULT_LABEL[p.result];
     if (p.result === 'TAKEN') t += '（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）';
     if (p.result === 'FOUL' && p.foulType) t += '・' + FOUL_LABEL[p.foulType];
     if (p.inplay) t += '・' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome] + (Number.isInteger(p.inplay.outsAdded) ? '（アウト+' + p.inplay.outsAdded + '）' : '');
@@ -195,7 +214,7 @@ function buildPitchList(filter) {
     if (p.memo) t += '　メモ：' + p.memo;
     const ti = typeInfo(p.pitchType);
     rows.push(el('button', { type: 'button', class: 'list-row', 'data-idx': i, onclick: function () { RV.view = 'play'; RV.idx = i; drawReview(); } }, [
-      el('span', { class: 'dot', style: { background: ti.color }, text: ti.code }), el('span', { class: 'recent-text', text: t })
+      el('span', { class: 'dot', style: { background: ti.color }, text: ti.code }), el('span', { class: 'recent-text' }, ['#' + p.seq + '　第' + (pa ? pa.paNo : '?') + '打席 ', pitchNo(p, pa), '　', rvBso(p.sit.balls, p.sit.strikes), t])
     ]));
     const maxSeq = RV.pitches.filter(function (x) { return x.paId === p.paId; }).reduce(function (m, x) { return Math.max(m, x.paSeq); }, 0);
     if (pa && pa.endType === 'SKIPPED' && p.paSeq === maxSeq) rows.push(el('p', { class: 'skipped-note', text: '終わりの球の記録なし（第' + pa.paNo + '打席）' }));

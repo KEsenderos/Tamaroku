@@ -1,5 +1,5 @@
 'use strict';
-// app.js（球録 v0.1.8）起動・タブの切り替え・更新ボタン・サービスワーカーの登録
+// app.js（球録 v0.1.9）起動・タブの切り替え・更新ボタン・サービスワーカーの登録
 let currentTab = 'record';
 let swRegistration = null;
 let lastUpdateCheck = 0;

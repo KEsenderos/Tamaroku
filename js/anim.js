@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.8）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.9）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -71,6 +71,15 @@ function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見�
     armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);
+  return parts;
+}
+
+// 打者だけ（ゾーンなし）の、動かない絵。記録タブのゾーンのとなりに出す
+function drawBatterOnly(svg, side) {
+  const parts = drawSilhouette(svg, side, false);
+  const z = svg.querySelector('.sil-zone'); if (z) z.parentNode.removeChild(z);
+  svg.setAttribute('viewBox', (side === 'L' ? '-30' : '215') + ' -22 135 316');
+  svg.setAttribute('aria-label', (side === 'L' ? '左' : '右') + '打者');
   return parts;
 }
 
@@ -171,6 +180,7 @@ function poseAt(pitch, t) {
         P.hand = [lerp(hx, hx - 8, u), lerp(hy, hy - 6, u)];
       } else {                                                                               // ②そのあと、頭の上を回って、うしろの肩へ巻く
         const w = easeOut((f - 0.4) / 0.6);
+        P.batBehind = f > 0.46;                                                              // 巻いたバットは、頭と胴体のうしろに入る
         const q = function (i) { return (1 - w) * (1 - w) * Vk[i] + 2 * (1 - w) * w * Vm[i] + w * w * Vf[i]; };
         P.bat = nz([q(0), q(1)]);
         P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
@@ -203,8 +213,9 @@ function renderFrame(parts, pitch, t, still) {
       if (pitch.result === 'FOUL' && pitch.foulType === 'OWN_BALL') {
         bx = lerp(cx, bxm(262), easeIn(w)); by = lerp(cy, GROUND_Y - 4, easeIn(w)); br = 6;
       } else if (pitch.result === 'FOUL') {
-        const d = foulScreenDir(pitch);
-        bx = cx + d[0] * 140 * easeOut(w); by = cy + d[1] * 140 * easeOut(w); br = lerp(7, 3, w); bo = 1 - 0.7 * w;
+        const d = foulScreenDir(pitch), far = pitch.foulDir === 'FBK' ? 260 : 140;       // 後方（バックネット）へのファウルは、真上へ高く上がる
+        const ww = pitch.foulDir === 'FBK' ? w : easeOut(w);
+        bx = cx + d[0] * far * ww; by = cy + d[1] * far * ww; br = lerp(7, 3, w); bo = pitch.foulDir === 'FBK' ? 1 - 0.3 * w : 1 - 0.7 * w;
       } else if (pitch.result === 'INPLAY') {
         const sgn = (pitch.inplay && FIELD_POINTS[pitch.inplay.dir] && FIELD_POINTS[pitch.inplay.dir][0] > 50) ? -1 : 1;
         bx = cx + sgn * 60 * easeOut(w); by = cy - 110 * easeOut(w); br = lerp(7, 3, w); bo = 1 - w;
@@ -230,6 +241,12 @@ function renderFrame(parts, pitch, t, still) {
 }
 
 function applyPose(parts, P) {
+  const behind = !!P.batBehind;                                              // バットを、体（胴・首・頭）より奥に描くか
+  if (parts._behind !== behind) {
+    parts._behind = behind;
+    if (behind) { parts.lean.insertBefore(parts.batH, parts.lean.firstChild); parts.lean.insertBefore(parts.bat, parts.torso); }
+    else { parts.lean.appendChild(parts.batH); parts.lean.appendChild(parts.bat); }
+  }
   const FS = [CX - P.hw, P.shF], BS = [CX + P.hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
   const hipF = [CX - 14, HIPY], hipB = [CX + 14, HIPY];
   parts.torso.setAttribute('points', pts2([FS, BS, [CX + 16, HIPY], [CX - 16, HIPY]]));
@@ -237,7 +254,7 @@ function applyPose(parts, P) {
   const hd = [CX + P.headDx, mid[1] - 30];
   parts.neck.setAttribute('d', 'M ' + mid[0].toFixed(1) + ' ' + mid[1].toFixed(1) + ' L ' + hd[0].toFixed(1) + ' ' + (hd[1] + 6).toFixed(1));
   parts.head.setAttribute('cx', hd[0].toFixed(1)); parts.head.setAttribute('cy', hd[1].toFixed(1));
-  parts.brim.setAttribute('points', pts2([[hd[0] - 13, hd[1] - 5], [hd[0] - 31, hd[1] + 2], [hd[0] - 13, hd[1] + 5]]));      // ヘルメットのつば（こちら＝ホーム側へ）
+  parts.brim.setAttribute('points', pts2([[hd[0] - 13, hd[1] - 4], [hd[0] - 22, hd[1] + 1], [hd[0] - 13, hd[1] + 4]]));      // ヘルメットのつば（こちら＝ホーム側へ）
   // 腕（ひじは、前の腕は下へ、うしろの腕は外側（または下）へ曲がる）
   const hand = P.hand;
   const eF = bend(FS, hand, ARM1, ARM2, function (nx, ny) { return ny; });
