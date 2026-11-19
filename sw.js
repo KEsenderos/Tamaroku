@@ -1,6 +1,6 @@
 'use strict';
-// sw.js（球録 v0.1.11）自分のサイトのファイルだけを覚える。更新ボタンが押されるまで、新しい版に切り替わらない
-const CACHE_VERSION = '0.1.11';
+// sw.js（球録 v0.1.13）自分のサイトのファイルだけを覚える。更新ボタンが押されるまで、新しい版に切り替わらない
+const CACHE_VERSION = '0.1.13';
 const CACHE_PREFIX = 'kyr-cache-';
 const CACHE_NAME = CACHE_PREFIX + 'v' + CACHE_VERSION;
 const PRECACHE = [

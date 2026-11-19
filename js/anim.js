@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.11）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.13）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -16,6 +16,7 @@ function svgNode(tag, attrs, kids) {
 function lerp(a, b, k) { return a + (b - a) * k; }
 function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
 function easeIn(x) { x = clamp01(x); return x * x; }
+function easeInOut(x) { x = clamp01(x); return x * x * (3 - 2 * x); }
 function easeOut(x) { x = clamp01(x); return 1 - (1 - x) * (1 - x); }
 function cellCenter(row, col) { return [ZX0 + ZCELL * (col - 0.5), ZY0 + ZCELL * (row - 0.5)]; }
 
@@ -129,74 +130,127 @@ function foulScreenDir(pitch) {                    // 画面での飛ぶ向き�
 }
 function isSwing(pitch) { return pitch.result === 'MISS' || pitch.result === 'FOUL' || pitch.result === 'INPLAY'; }
 
-// この球の、打者の姿勢（時間 t）。pitch が null のときは構え
-function poseAt(pitch, t) {
-  const P = { hw: 24, shF: 118, shB: 112, hand: HAND_READY.slice(), bat: BAT_READY.slice(), footF: FOOT_F0.slice(), footB: FOOT_B0.slice(), headDx: -2, lean: 0 };
+// 打った方向（引っ張り・センター・流し）。踏み込む足の位置を決める
+function swingDirOf(pitch, side) {
+  if (pitch.result === 'INPLAY' && pitch.inplay && DIR_SIDE[pitch.inplay.dir]) return pullOppo(pitch.inplay.dir, side);
+  if (pitch.result === 'FOUL') {
+    const pull = side === 'R' ? 'F3B' : 'F1B', oppo = side === 'R' ? 'F1B' : 'F3B';
+    return pitch.foulDir === pull ? 'PULL' : (pitch.foulDir === oppo ? 'OPPO' : 'CENTER');
+  }
+  const hb = hBand(pitch.col, side);                                                         // 空振り：球の内外から
+  return (hb === 'IN1' || hb === 'IN2') ? 'PULL' : (hb === 'MID' ? 'CENTER' : 'OPPO');
+}
+// 前足が着く位置（画面のx）：流し＝うしろの足の外側まで／センター＝その中ほど／引っ張り＝いちばん前（ゾーン側）
+const STRIDE_X = { PULL: FOOT_F0[0] - 20, CENTER: FOOT_B0[0] - 34, OPPO: FOOT_B0[0] + 8 };
+const T_CONTACT = T_HIT;                                                                    // 当たる瞬間
+function nzv(v) { const l = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1; return [v[0] / l, v[1] / l]; }
+function lerpPose(A, B, k) {
+  const R = {};
+  Object.keys(A).forEach(function (key) {
+    const a = A[key], b = B[key];
+    if (Array.isArray(a)) R[key] = [lerp(a[0], b[0], k), lerp(a[1], b[1], k)];
+    else if (typeof a === 'number') R[key] = lerp(a, b, k);
+    else R[key] = a;
+  });
+  R.bat = nzv(R.bat);
+  return R;
+}
+function readyPose() {
+  return { hw: 24, hipHW: 14, hipDx: 0, shF: 118, shB: 112, hand: HAND_READY.slice(), bat: BAT_READY.slice(), footF: FOOT_F0.slice(), footB: FOOT_B0.slice(), headDx: -2, lean: 0 };
+}
+
+// この球の、打者の姿勢（時間 t）。pitch が null のときは構え。
+// 見逃し（無反応）は動かない／見逃し（バットが出かかった・止めた）は途中まで振って戻る／空振り・ファウル・インプレーは振り抜く
+// 動きだす順番：足 → 腰 → 肩 → 腕 → バット
+function poseAt(pitch, t, side) {
+  const P = readyPose();
   if (!pitch) return P;
-  // ① 足を上げて、踏み出す（どの球でも、同じ。t 0.04〜0.36）
+  const swingKind = (pitch.result === 'MISS' || pitch.result === 'FOUL' || pitch.result === 'INPLAY');
+  const react = pitch.reaction || (pitch.result === 'MISS' ? 'TIMED' : (pitch.result === 'TAKEN' ? 'NONE' : null));
+  if (!swingKind && react !== 'BAT_OUT' && react !== 'CHECK') {
+    if (pitch.result === 'HBP') P.lean = lerp(0, 10, easeOut((t - T_HIT) / 0.12));
+    return P;                                                                                // ピクリとも動かない
+  }
+  const partial = !swingKind;                                                                // 途中まで振って止める
+  const tCap = react === 'CHECK' ? 0.53 : 0.49;                                             // 止めるまでの時間（当たる前）
+  const tShift = (pitch.result === 'MISS' && react === 'NO_TIMING') ? 0.13 : 0;              // 全くタイミングが合わない空振りは、振るのが遅れる
+  const isBunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
+  const dir = swingKind && !isBunt ? swingDirOf(pitch, side) : null;
+  const strideX = dir ? STRIDE_X[dir] : FOOT_F0[0] - 14;
+
+  // ① 足を上げて、踏み出す（t 0.04〜0.36）
   const lift = easeOut(clamp01((t - 0.04) / 0.14)) * (1 - easeIn(clamp01((t - 0.20) / 0.16)));
   const stride = easeOut(clamp01((t - 0.10) / 0.26));
-  const isBunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
-  const strideX = (isSwing(pitch) && !isBunt) ? FOOT_B0[0] + 8 : FOOT_F0[0] - 14;               // 打つ・空振りのときは、投手側へ大きく踏み込み、うしろの足と重なって、その外側へ出る（クローズドの構えが開く）
   P.footF = [lerp(FOOT_F0[0], strideX, stride), GROUND_Y - 26 * lift];
-  const loadIn = easeOut(clamp01((t - 0.08) / 0.18));                                        // 引く（t 0.08〜0.26）
-  const swing = isSwing(pitch);
-  const back = swing ? 1 : 1 - easeIn(clamp01((t - 0.42) / 0.22));                            // 見逃しも同じように引き、そのあと構えに戻る
-  const loadK = loadIn * back;
+  // ② テイクバック（t 0.08〜0.26）と、打ちにいく直前の反動（t 0.26〜0.36）
+  const loadK = easeOut(clamp01((t - 0.08) / 0.18));
   P.hand = [lerp(HAND_READY[0], LOAD_HAND[0], loadK), lerp(HAND_READY[1], LOAD_HAND[1], loadK)];
   P.bat = [lerp(BAT_READY[0], LOAD_BAT[0], loadK), lerp(BAT_READY[1], LOAD_BAT[1], loadK)];
-  P.hw = lerp(24, LOAD_HW, loadK); P.lean = LOAD_LEAN * loadK;
-  const coilK = easeOut(clamp01((t - 0.26) / 0.10)) * back;                            // 打ちにいく直前、さらに少し後ろへ（t 0.26〜0.36）
+  P.hw = lerp(24, LOAD_HW, loadK); P.hipHW = lerp(14, 12, loadK); P.lean = LOAD_LEAN * loadK;
+  const coilK = easeOut(clamp01((t - 0.26) / 0.10));
   if (coilK > 0) {
     P.hand = [lerp(LOAD_HAND[0], COIL_HAND[0], coilK), lerp(LOAD_HAND[1], COIL_HAND[1], coilK)];
     P.bat = [lerp(LOAD_BAT[0], COIL_BAT[0], coilK), lerp(LOAD_BAT[1], COIL_BAT[1], coilK)];
-    P.hw = lerp(LOAD_HW, COIL_HW, coilK); P.lean = lerp(LOAD_LEAN, COIL_LEAN, coilK);
+    P.hw = lerp(LOAD_HW, COIL_HW, coilK); P.hipHW = lerp(12, 10, coilK); P.lean = lerp(LOAD_LEAN, COIL_LEAN, coilK);
   }
+  const planted = Object.assign({}, P, { footF: [strideX, GROUND_Y] });                      // 戻るときの、足が着いたままの構え
+  // ③ 振る
   const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
-  const bunt = !!(pitch.inplay && pitch.inplay.kind === 'BUNT');
-  if (isSwing(pitch)) {
-    const off = pitch.result === 'MISS' ? (pitch.row <= 3 ? 22 : -22) : 0;                  // 空振りは、球の下（または上）を振る
-    const tx = cx, ty = cy + off;
-    const hx = Math.max(226, Math.min(262, tx + BAT_LEN * 0.78)), hy = Math.max(118, Math.min(172, ty));
-    let ddx = tx - hx, ddy = ty - hy; const dl = Math.sqrt(ddx * ddx + ddy * ddy);
-    if (dl < 8) { ddx = -1; ddy = 0; } else { ddx /= dl; ddy /= dl; }
-    const tau = clamp01((t - T_SWING) / 0.35);
-    const aR = Math.atan2(COIL_BAT[1], COIL_BAT[0]);                                       // 約 -95°
-    let aC = Math.atan2(ddy, ddx); if (aC > 0) aC -= Math.PI * 2;                           // 上から左へ回って当たる向き
-    if (bunt) {
-      const k = easeOut(tau / 0.5);
-      P.hand = [lerp(COIL_HAND[0], hx + 6, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
-      const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
-      P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
-    } else if (tau < 0.6) {
-      const k = easeIn(tau / 0.6);
-      P.hand = [lerp(COIL_HAND[0], hx, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
-      const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
-      P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 112, k); P.shB = lerp(112, 124, k);
-      P.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, k), GROUND_Y - 5 * k];                    // うしろの足のかかとが上がる
-      P.headDx = lerp(-2, -4, k);
-    } else {
-      const f = clamp01((t - T_HIT) / 0.26);                                                 // 当たったあと（t 0.57〜0.83）
-      const Vc = [Math.cos(aC), Math.sin(aC)], Vk = [-0.78, -0.62], Vm = [0, -1], Vf = [0.82, -0.57];
-      const nz = function (v) { const l = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1; return [v[0] / l, v[1] / l]; };
-      if (f < 0.4) {                                                                         // ①打ったあとも、バットは前（ゾーン側）へ振り抜く
-        const u = easeOut(f / 0.4);
-        P.bat = nz([lerp(Vc[0], Vk[0], u), lerp(Vc[1], Vk[1], u)]);
-        P.hand = [lerp(hx, hx - 8, u), lerp(hy, hy - 6, u)];
-      } else {                                                                               // ②そのあと、頭の上を回って、うしろの肩へ巻く
-        const w = easeOut((f - 0.4) / 0.6);
-        P.batBehind = f > 0.46;                                                              // 巻いたバットは、頭と胴体のうしろに入る
-        const q = function (i) { return (1 - w) * (1 - w) * Vk[i] + 2 * (1 - w) * w * Vm[i] + w * w * Vf[i]; };
-        P.bat = nz([q(0), q(1)]);
-        P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
-      }
-      P.hw = lerp(30, 10, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
-      P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
-      P.footF = [strideX, GROUND_Y]; P.lean = lerp(-3, 0, f);
-      P.headDx = lerp(-4, -10, f);
-    }
+  const ts = (partial ? Math.min(t, tCap) : t) - tShift;                                       // スイングの時計
+  const off = pitch.result === 'MISS' ? ((react === 'NO_TIMING' ? 38 : 22) * (pitch.row <= 3 ? 1 : -1)) : 0;   // 空振りは球の下（または上）を振る
+  const tx = cx, ty = cy + off;
+  const hx = Math.max(226, Math.min(262, tx + BAT_LEN * 0.78)), hy = Math.max(118, Math.min(172, ty));
+  let ddx = tx - hx, ddy = ty - hy; const dl = Math.sqrt(ddx * ddx + ddy * ddy);
+  if (dl < 8) { ddx = -1; ddy = 0; } else { ddx /= dl; ddy /= dl; }
+  const aR = Math.atan2(COIL_BAT[1], COIL_BAT[0]);
+  let aC = Math.atan2(ddy, ddx); if (aC > 0) aC -= Math.PI * 2;
+  const hipP = easeInOut(clamp01((ts - 0.30) / 0.30));                                         // 腰（0.30〜0.60）
+  const shP = easeInOut(clamp01((ts - 0.35) / 0.30));                                          // 肩（0.35〜0.65）
+  const kArm = easeIn(clamp01((ts - 0.40) / 0.168));                                           // 腕（0.40〜0.568）
+  const kBat = easeIn(clamp01((ts - 0.43) / 0.138));                                           // バット（0.43〜0.568）
+  const tc = T_CONTACT + tShift;
+  if (isBunt) {
+    const k = easeOut(clamp01((ts - 0.40) / 0.15));
+    P.hand = [lerp(COIL_HAND[0], hx + 6, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
+    const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
+    P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
+    return P;
   }
-  if (pitch.result === 'HBP') P.lean = lerp(0, 10, easeOut((t - T_HIT) / 0.12));
+  const aSwing = lerp(aR, aC, kBat);
+  const swingP = Object.assign({}, P);
+  if (ts < tc) {
+    swingP.hand = [lerp(COIL_HAND[0], hx, kArm), lerp(COIL_HAND[1], hy, kArm)];
+    swingP.bat = [Math.cos(aSwing), Math.sin(aSwing)];
+    swingP.hipHW = lerp(10, 24, hipP); swingP.hipDx = lerp(0, -4, hipP);                       // 腰がまず開く
+    swingP.hw = lerp(COIL_HW, 30, shP);                                                         // つぎに肩が開く
+    swingP.shF = lerp(118, 112, shP); swingP.shB = lerp(112, 124, shP);
+    swingP.lean = lerp(COIL_LEAN, -3, shP);
+    swingP.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, hipP), GROUND_Y - 5 * hipP];              // うしろの足のかかとが上がる
+    swingP.headDx = lerp(-2, -4, shP);
+    swingP.footF = [strideX, GROUND_Y - 26 * lift];
+    if (!partial) return swingP;
+    // 途中で止めた：止めたまま少し間をおいて、構えに戻る
+    const rec = easeInOut(clamp01((t - (tCap + 0.08)) / 0.22));
+    return lerpPose(swingP, planted, rec);
+  }
+  const f = clamp01((ts - tc) / 0.26);                                                          // 当たったあと
+  const Vc = [Math.cos(aC), Math.sin(aC)], Vk = [-0.78, -0.62], Vm = [0, -1], Vf = [0.82, -0.57];
+  if (f < 0.4) {                                                                                 // ①打ったあとも、バットは前（ゾーン側）へ振り抜く
+    const u = easeOut(f / 0.4);
+    P.bat = nzv([lerp(Vc[0], Vk[0], u), lerp(Vc[1], Vk[1], u)]);
+    P.hand = [lerp(hx, hx - 8, u), lerp(hy, hy - 6, u)];
+  } else {                                                                                       // ②そのあと、頭の上を回って、うしろの肩へ巻く（投手側の腕・肩・バットは、胴と頭のうしろへ）
+    const w = easeOut((f - 0.4) / 0.6);
+    P.batBehind = f > 0.46;
+    const q = function (i) { return (1 - w) * (1 - w) * Vk[i] + 2 * (1 - w) * w * Vm[i] + w * w * Vf[i]; };
+    P.bat = nzv([q(0), q(1)]);
+    P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
+  }
+  P.hipHW = lerp(24, 27, easeOut(f)); P.hipDx = -4;
+  P.hw = lerp(30, 24, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
+  P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
+  P.footF = [strideX, GROUND_Y]; P.lean = lerp(-3, 0, f);
+  P.headDx = lerp(-4, -10, f);
   return P;
 }
 
@@ -242,7 +296,7 @@ function renderFrame(parts, pitch, t, still) {
     }
     if (t >= T_HIT) { parts.cellHit.setAttribute('x', ZX0 + ZCELL * (pitch.col - 1)); parts.cellHit.setAttribute('y', ZY0 + ZCELL * (pitch.row - 1)); parts.cellHit.setAttribute('opacity', 1); }
   }
-  applyPose(parts, poseAt(pitch, pitch ? t : 0));
+  applyPose(parts, poseAt(pitch, pitch ? t : 0, parts.side));
 }
 
 function applyPose(parts, P) {
@@ -255,8 +309,8 @@ function applyPose(parts, P) {
     order.forEach(function (e) { parts.lean.appendChild(e); });
   }
   const FS = [CX - P.hw, P.shF], BS = [CX + P.hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
-  const hipF = [CX - 14, HIPY], hipB = [CX + 14, HIPY];
-  parts.torso.setAttribute('points', pts2([FS, BS, [CX + 16, HIPY], [CX - 16, HIPY]]));
+  const hipF = [CX - P.hipHW + P.hipDx, HIPY], hipB = [CX + P.hipHW + P.hipDx, HIPY];
+  parts.torso.setAttribute('points', pts2([FS, BS, [hipB[0] + 2, HIPY], [hipF[0] - 2, HIPY]]));
   const mid = [(FS[0] + BS[0]) / 2, (FS[1] + BS[1]) / 2];
   const hd = [CX + P.headDx, mid[1] - 30];
   parts.neck.setAttribute('d', 'M ' + mid[0].toFixed(1) + ' ' + mid[1].toFixed(1) + ' L ' + hd[0].toFixed(1) + ' ' + (hd[1] + 6).toFixed(1));

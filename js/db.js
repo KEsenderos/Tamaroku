@@ -1,5 +1,5 @@
 'use strict';
-// db.js（球録 v0.1.11）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
+// db.js（球録 v0.1.13）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
 let _db = null;
 let _dbOpening = null;
 
@@ -428,6 +428,7 @@ function validateBackup(obj) {
     if (typeof p.pitchType !== 'string' || codes.indexOf(p.pitchType) < 0) bad('球' + (i + 1) + '：球種が一覧にありません');
     if (RESULT_ORDER.indexOf(p.result) < 0) bad('球' + (i + 1) + '：結果が決まった値ではありません');
     if (p.takenCall !== null && p.takenCall !== 'S' && p.takenCall !== 'B') bad('球' + (i + 1) + '：判定が読めません');
+    if (p.reaction !== undefined && p.reaction !== null && REACT_ORDER.indexOf(p.reaction) < 0) bad('球' + (i + 1) + '：反応が読めません');
     if (p.foulType !== null && FOUL_ORDER.indexOf(p.foulType) < 0) bad('球' + (i + 1) + '：ファウルの種類が読めません');
     if (p.foulDir !== null && FOULDIR_ORDER.indexOf(p.foulDir) < 0) bad('球' + (i + 1) + '：ファウルの方向が読めません');
     if (p.inplay !== null) {

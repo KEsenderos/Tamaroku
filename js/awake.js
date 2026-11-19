@@ -1,5 +1,5 @@
 'use strict';
-// awake.js（球録 v0.1.11）記録中は画面を点けたままにする（5.9）
+// awake.js（球録 v0.1.13）記録中は画面を点けたままにする（5.9）
 let _awSentinel = null;
 let _awLastTouch = Date.now();
 let _awDenied = false;          // 取得に失敗した（拒否）

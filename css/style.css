@@ -215,3 +215,15 @@ button:disabled { opacity: .45; cursor: default; }
 .zone-batter.r { right: -4%; } .zone-batter.l { left: -4%; }
 
 .zone-batter { top: 0; height: 100%; } .zone-batter.r { right: 0; } .zone-batter.l { left: 0; }
+
+/* ゾーンと打者は、重ねずに横にならべる（打者はうっすら） */
+.zone-row { display: flex; align-items: flex-end; gap: 6px; max-width: 480px; margin: 0 auto; }
+.zone-row.left { flex-direction: row-reverse; }
+.zone-col { flex: 1 1 0; min-width: 0; }
+.zone-row .zone { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: none; margin: 0; }
+.zone-row .cell { min-height: 0; min-width: 0; }
+.zone-row .zone-cap { max-width: none; }
+.zone-batter { position: static; flex: 0 0 31%; width: 31%; height: auto; opacity: .38; pointer-events: none; }
+.batter-next { display: block; font-size: 12px; font-weight: 400; }
+
+.res-cap { margin: 6px 0 2px; font-size: 13px; color: var(--kyr-sub); font-weight: 700; }

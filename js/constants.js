@@ -1,6 +1,6 @@
 'use strict';
-// constants.js（球録 v0.1.11・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
-const APP_VERSION = '0.1.11';
+// constants.js（球録 v0.1.13・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
+const APP_VERSION = '0.1.13';
 const APP_STAGE = 3;                  // 1=記録・設定 / 2=振り返り / 3=シルエット（6.4）
 const SCHEMA_VERSION = 1;             // 保存の形の版
 const DB_NAME = 'kyr-db';
@@ -43,6 +43,13 @@ const DEFAULT_START_TYPES = ['ST', 'SL', 'CV', 'CH'];
 // 画面の表示名（内部の値とは分ける）
 const RESULT_ORDER = ['TAKEN', 'MISS', 'FOUL', 'HBP', 'INPLAY'];
 const RESULT_LABEL = { TAKEN: '見逃し', MISS: '空振り', FOUL: 'ファウル', HBP: '死球', INPLAY: 'インプレー' };
+// 見逃し・空振りのときの、打者の反応（球に対する体の動き）。見逃し：無反応／バットが出かかった／スイング判定されないギリギリで止めた。空振り：タイミングが少し合った／全く合わない
+const REACT_ORDER = ['NONE', 'BAT_OUT', 'CHECK', 'TIMED', 'NO_TIMING'];
+const REACT_TEXT = { NONE: '無反応', BAT_OUT: 'バットが出かかった', CHECK: 'バットを止めた（スイング判定なし）', TIMED: '', NO_TIMING: 'タイミングが全く合わない' };
+function reactSuffix(p) {                                // 画面の文章に足す文字（なければ空）
+  if (!p || (p.result !== 'TAKEN' && p.result !== 'MISS') || !p.reaction || !REACT_TEXT[p.reaction]) return '';
+  return '・' + REACT_TEXT[p.reaction];
+}
 const FOUL_ORDER = ['PULL_CUT', 'LATE_OPPO', 'BACK_GOOD', 'CUT', 'UNDER_NICK', 'OWN_BALL', 'OTHER'];
 const FOUL_LABEL = { PULL_CUT: '引っ張り切れ', LATE_OPPO: '遅れ流し', BACK_GOOD: '後方好打', CUT: 'カット', UNDER_NICK: '下かすり', OWN_BALL: '自打球', OTHER: 'その他のファウル' };
 const FOULDIR_ORDER = ['F1B', 'F3B', 'FBK', 'FLN'];

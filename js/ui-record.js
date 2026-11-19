@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.11）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.13）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -457,10 +457,13 @@ function buildBatterBar() {
   const pa = curPa();
   const kids = R.game.batters.map(function (b) {
     const active = pa && pa.batterId === b.id;
+    const n = R.pas.filter(function (a) { return a.batterId === b.id; }).length;                  // この打者の、これまでの打席数
     return el('button', { type: 'button', class: 'btn batter' + (active ? ' on' : ''), 'data-batter': b.id, disabled: !idle, 'aria-pressed': active ? 'true' : 'false',
-      text: b.name + '（' + (b.side === 'R' ? '右' : '左') + '）', onclick: function () { startPa(b.id); } });
+      onclick: function () { startPa(b.id); } }, [b.name + '（' + (b.side === 'R' ? '右' : '左') + '）', idle ? el('span', { class: 'batter-next', text: '押すと ' + (n + 1) + '打席目' }) : null]);
   });
-  return el('div', { id: 'batter-bar', class: 'card' }, [el('h2', { text: '打者' }), el('div', { class: 'btn-row wrap' }, kids)]);
+  return el('div', { id: 'batter-bar', class: 'card' }, [el('h2', { text: '打者' }),
+    el('p', { class: 'sub tiny', text: idle ? '打席が終わったら、次の打者を押します。同じ打者をもう一度押すと、その打者の次の打席になります' : '打席の途中です。終わると、打者のボタンがまた押せます' }),
+    el('div', { class: 'btn-row wrap' }, kids)]);
 }
 async function startPa(batterId) {
   if (R.isSaving || R.state !== 'IDLE') return;
@@ -475,36 +478,46 @@ async function startPa(batterId) {
   R.pas.push(pa); R.game.liveSit = nl; R.state = 'AWAIT_RESULT'; R.draft = null; R.emphasize = false; R.selectedPitchId = null;
   renderRecord();
 }
-// いまのカウントで「あり得る手」だけを出す。3ボールのボールは四球、2ストライクのストライクは三振になる（3ストライク・4ボールの状態はない）
-function resultChoices() {
+function resultRows() {
   const live = R.game ? R.game.liveSit : null;
   const b = live ? live.balls : 0, st = live ? live.strikes : 0;
+  const k = st >= 2 ? '（押すと三振）' : '';
   return [
-    { result: 'TAKEN', call: 'B', label: b >= 3 ? '四球' : 'ボール', cls: 'res-TAKEN' },
-    { result: 'TAKEN', call: 'S', label: st >= 2 ? '見逃し三振' : '見逃し', cls: 'res-TAKEN' },
-    { result: 'MISS', call: null, label: st >= 2 ? '空振り三振' : '空振り', cls: 'res-MISS' },
-    { result: 'FOUL', call: null, label: 'ファウル', cls: 'res-FOUL' },
-    { result: 'HBP', call: null, label: '死球', cls: 'res-HBP' },
-    { result: 'INPLAY', call: null, label: 'インプレー', cls: 'res-INPLAY' }
+    { cap: null, items: [
+      { result: 'TAKEN', call: 'B', reaction: 'NONE', label: b >= 3 ? '四球' : 'ボール', cls: 'res-TAKEN' },
+      { result: 'FOUL', call: null, reaction: null, label: 'ファウル', cls: 'res-FOUL' },
+      { result: 'HBP', call: null, reaction: null, label: '死球', cls: 'res-HBP' },
+      { result: 'INPLAY', call: null, reaction: null, label: 'インプレー', cls: 'res-INPLAY' }] },
+    { cap: '見逃し' + k, items: [
+      { result: 'TAKEN', call: 'S', reaction: 'NONE', label: '見逃(無反)', cls: 'res-TAKEN' },
+      { result: 'TAKEN', call: 'S', reaction: 'BAT_OUT', label: '見逃(反有)', cls: 'res-TAKEN' },
+      { result: 'TAKEN', call: 'S', reaction: 'CHECK', label: '見逃(バ止)', cls: 'res-TAKEN' }] },
+    { cap: '空振り' + k, items: [
+      { result: 'MISS', call: null, reaction: 'TIMED', label: '空振', cls: 'res-MISS' },
+      { result: 'MISS', call: null, reaction: 'NO_TIMING', label: '空振(全無)', cls: 'res-MISS' }] }
   ];
 }
 function buildResultBar() {
   const on = R.state === 'AWAIT_RESULT' || R.state === 'AWAIT_ZONE';
-  const sel = R.draft ? R.draft.result : null, selCall = R.draft ? R.draft.takenCall : null;
-  return el('div', { id: 'result-bar', class: 'card' }, [
-    el('div', { class: 'btn-row wrap' }, resultChoices().map(function (c) {
-      const isOn = sel === c.result && (c.result !== 'TAKEN' || selCall === c.call);
-      return el('button', { type: 'button', class: 'btn res ' + c.cls + (isOn ? ' on' : ''), 'data-result': c.result, 'data-call': c.call || '', disabled: !on, 'aria-pressed': isOn ? 'true' : 'false', text: c.label, onclick: function () { onResultTap(c.result, c.call); } });
-    }))
-  ]);
+  const sel = R.draft ? R.draft.result : null, selCall = R.draft ? R.draft.takenCall : null, selReact = R.draft ? R.draft.reaction : null;
+  const rows = [];
+  resultRows().forEach(function (row) {
+    if (row.cap) rows.push(el('p', { class: 'res-cap', text: row.cap }));
+    rows.push(el('div', { class: 'btn-row wrap' }, row.items.map(function (c) {
+      const isOn = sel === c.result && (c.result !== 'TAKEN' || (selCall === c.call && selReact === c.reaction)) && (c.result !== 'MISS' || selReact === c.reaction);
+      return el('button', { type: 'button', class: 'btn res ' + c.cls + (isOn ? ' on' : ''), 'data-result': c.result, 'data-call': c.call || '', 'data-react': c.reaction || '', disabled: !on, 'aria-pressed': isOn ? 'true' : 'false', text: c.label, onclick: function () { onResultTap(c.result, c.call, c.reaction); } });
+    })));
+  });
+  return el('div', { id: 'result-bar', class: 'card' }, rows);
 }
-function onResultTap(r, call) {
+function onResultTap(r, call, reaction) {
   if (R.isSaving) return;
   if (R.state !== 'AWAIT_RESULT' && R.state !== 'AWAIT_ZONE') return;
   if (typeof awakeTouch === 'function') awakeTouch();
   if (!R.draft) R.draft = { pitchId: newId('p', Date.now(), Math.random()) };       // 球のIDは、入力を始めた時点で1つ作る
   R.draft.result = r;
   R.draft.takenCall = (r === 'TAKEN') ? call : undefined;                            // 見逃しのボール・ストライクは、押したボタンで決まる
+  R.draft.reaction = reaction || undefined;                                          // 見逃し・空振りの反応
   R.state = 'AWAIT_ZONE';
   renderRecord();
 }
@@ -532,7 +545,7 @@ function buildZone() {
   const cap = side ? el('p', { class: 'zone-cap ' + (side === 'R' ? 'right' : 'left'), text: side === 'R' ? '内角側 ▶' : '◀ 内角側' }) : null;
   return el('div', { class: 'card' }, [
     el('h2', { text: 'コース（投手から見て）' }),
-    cap, el('div', { class: 'zone-stage' }, [el('div', { id: 'zone-grid', class: 'zone' }, rows), batterFigure(side)]),
+    el('div', { class: 'zone-row' + (side === 'L' ? ' left' : '') }, [el('div', { class: 'zone-col' }, [cap, el('div', { id: 'zone-grid', class: 'zone' }, rows)]), batterFigure(side)]),
     (d && d.result === 'TAKEN' && d.row) ? el('div', { class: 'btn-row' }, [
       el('span', { id: 'taken-call', text: '判定：' + (d.takenCall === 'S' ? 'ストライク' : 'ボール') }),
       el('button', { type: 'button', class: 'btn small', id: 'taken-flip', text: '判定を逆にする', onclick: function () { if (R.isSaving) return; d.takenCall = (d.takenCall === 'S') ? 'B' : 'S'; renderRecord(); } })
@@ -673,6 +686,7 @@ async function commitPitch() {
     pitcher: { name: curPitcher().name, hand: curPitcher().hand },
     row: d.row, col: d.col, pitchType: d.pitchType, result: d.result,
     takenCall: d.result === 'TAKEN' ? d.takenCall : null,
+    reaction: (d.result === 'TAKEN' || d.result === 'MISS') ? (d.reaction || (d.result === 'TAKEN' ? 'NONE' : 'TIMED')) : null,
     foulType: d.result === 'FOUL' ? d.foulType : null,
     foulDir: d.result === 'FOUL' ? (d.foulDir === undefined ? null : d.foulDir) : null,
     inplay: isInplay ? { kind: d.kind, dir: d.dir, outcome: d.outcome, outsAdded: (d.outcome === 'ERR' || d.outcome === 'FC' || d.outcome === 'INTERF') ? d.outsAdded : null } : null,
@@ -756,7 +770,7 @@ async function closePa() {
 function pitchSummary(p) {
   const pa = R.pas.find(function (a) { return a.id === p.paId; });
   const side = pa ? pa.side : 'R';
-  let s = '#' + p.seq + ' ' + (pa ? pa.batterName : '') + ' ' + RESULT_LABEL[p.result] + '・' + zoneLabel(p.row, p.col, side);
+  let s = '#' + p.seq + ' ' + (pa ? pa.batterName : '') + ' ' + RESULT_LABEL[p.result] + reactSuffix(p) + '・' + zoneLabel(p.row, p.col, side);
   if (p.result === 'TAKEN') s += '（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）';
   if (p.result === 'FOUL' && p.foulType) s += '・' + FOUL_LABEL[p.foulType];
   if (p.inplay) {
