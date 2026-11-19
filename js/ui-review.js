@@ -1,5 +1,5 @@
 'use strict';
-// ui-review.js（球録 v0.1.13）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
+// ui-review.js（球録 v0.1.14）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
 // 表示するだけで、「次はこの球」「待っている球」のような予想は出さない
 
 const RV = {
@@ -52,7 +52,7 @@ function reactionText(p) {
   if (p.result === 'MISS') return '空振り' + reactSuffix(p);
   if (p.result === 'HBP') return '死球';
   if (p.result === 'FOUL') return 'ファウル（' + (p.foulType ? FOUL_LABEL[p.foulType] : '') + (p.foulDir ? '・' + FOULDIR_LABEL[p.foulDir] : '') + '）';
-  if (p.result === 'INPLAY' && p.inplay) return '打った：' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome];
+  if (p.result === 'INPLAY' && p.inplay) return '打った：' + kindText(p.inplay) + '・' + dirText(p.inplay) + '・' + OUTCOME_LABEL[p.inplay.outcome];
   return RESULT_LABEL[p.result];
 }
 function marksText(p) { return p.marks && p.marks.length ? '【' + p.marks.map(function (m) { return MARK_LABEL[m]; }).join('・') + '】' : ''; }
@@ -193,8 +193,7 @@ function rvShow(animate) {
   inf.react.className = 'rv-react rr-' + p.result;
   setKids(inf.who, ['第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　', pitchNo(p, pa), '　', rvBso(p.sit.balls, p.sit.strikes), '　' + (i + 1) + '/' + n + '球']);
   const aft = afterText(p, pa), tail = (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
-  const mm = /^B(\d) S(\d) になった$/.exec(aft);
-  if (mm) setKids(inf.after, [rvBso(Number(mm[1]), Number(mm[2])), ' になった' + tail]); else inf.after.textContent = aft + tail;
+  inf.after.textContent = /^B\d S\d になった$/.test(aft) ? tail.replace(/^　/, '') : aft + tail;       // カウントは上の段に出ているので、ここには出さない
   if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side, true); }
   pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-right' : 'at-left') : 'off');
   playMotion(pl.svg, p, { field: pl.field });
@@ -209,7 +208,7 @@ function buildPitchList(filter) {
     if (p.result === 'TAKEN') t += '（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）';
     t += reactSuffix(p);
     if (p.result === 'FOUL' && p.foulType) t += '・' + FOUL_LABEL[p.foulType];
-    if (p.inplay) t += '・' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome] + (Number.isInteger(p.inplay.outsAdded) ? '（アウト+' + p.inplay.outsAdded + '）' : '');
+    if (p.inplay) t += '・' + kindText(p.inplay) + '・' + dirText(p.inplay) + '・' + OUTCOME_LABEL[p.inplay.outcome] + (Number.isInteger(p.inplay.outsAdded) ? '（アウト+' + p.inplay.outsAdded + '）' : '');
     t += ' ' + marksText(p);
     if (p.sitEdited) t += '　※状況を修正';
     if (p.memo) t += '　メモ：' + p.memo;

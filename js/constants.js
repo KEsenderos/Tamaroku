@@ -1,6 +1,6 @@
 'use strict';
-// constants.js（球録 v0.1.13・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
-const APP_VERSION = '0.1.13';
+// constants.js（球録 v0.1.14・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
+const APP_VERSION = '0.1.14';
 const APP_STAGE = 3;                  // 1=記録・設定 / 2=振り返り / 3=シルエット（6.4）
 const SCHEMA_VERSION = 1;             // 保存の形の版
 const DB_NAME = 'kyr-db';
@@ -44,6 +44,8 @@ const DEFAULT_START_TYPES = ['ST', 'SL', 'CV', 'CH'];
 const RESULT_ORDER = ['TAKEN', 'MISS', 'FOUL', 'HBP', 'INPLAY'];
 const RESULT_LABEL = { TAKEN: '見逃し', MISS: '空振り', FOUL: 'ファウル', HBP: '死球', INPLAY: 'インプレー' };
 // 見逃し・空振りのときの、打者の反応（球に対する体の動き）。見逃し：無反応／バットが出かかった／スイング判定されないギリギリで止めた。空振り：タイミングが少し合った／全く合わない
+function kindText(ip) { return ip && ip.kind ? KIND_LABEL[ip.kind] : '種類不明'; }      // 打球の種類・方向は、押さなくても記録できる
+function dirText(ip) { return ip && ip.dir ? DIR_LABEL[ip.dir] : '方向不明'; }
 const REACT_ORDER = ['NONE', 'BAT_OUT', 'CHECK', 'TIMED', 'NO_TIMING'];
 const REACT_TEXT = { NONE: '無反応', BAT_OUT: 'バットが出かかった', CHECK: 'バットを止めた（スイング判定なし）', TIMED: '', NO_TIMING: 'タイミングが全く合わない' };
 function reactSuffix(p) {                                // 画面の文章に足す文字（なければ空）

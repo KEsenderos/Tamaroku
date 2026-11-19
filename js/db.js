@@ -1,5 +1,5 @@
 'use strict';
-// db.js（球録 v0.1.13）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
+// db.js（球録 v0.1.14）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
 let _db = null;
 let _dbOpening = null;
 
@@ -433,7 +433,7 @@ function validateBackup(obj) {
     if (p.foulDir !== null && FOULDIR_ORDER.indexOf(p.foulDir) < 0) bad('球' + (i + 1) + '：ファウルの方向が読めません');
     if (p.inplay !== null) {
       const ip = p.inplay;
-      if (!isObj(ip) || KIND_ORDER.indexOf(ip.kind) < 0 || DIR_ALL.indexOf(ip.dir) < 0 || OUTCOME_ORDER.indexOf(ip.outcome) < 0) bad('球' + (i + 1) + '：打球の情報が読めません');
+      if (!isObj(ip) || (ip.kind !== null && KIND_ORDER.indexOf(ip.kind) < 0) || (ip.dir !== null && DIR_ALL.indexOf(ip.dir) < 0) || OUTCOME_ORDER.indexOf(ip.outcome) < 0) bad('球' + (i + 1) + '：打球の情報が読めません');
       else if (ip.outsAdded !== undefined && ip.outsAdded !== null && !isInt(ip.outsAdded, 0, 2)) bad('球' + (i + 1) + '：アウトの数が範囲外です');
     }
     if (!Array.isArray(p.marks) || !p.marks.every(function (m) { return MARK_ORDER.indexOf(m) >= 0; })) bad('球' + (i + 1) + '：印が読めません');

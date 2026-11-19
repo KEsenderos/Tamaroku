@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.13）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.1.14）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -480,19 +480,18 @@ async function startPa(batterId) {
 }
 function resultRows() {
   const live = R.game ? R.game.liveSit : null;
-  const b = live ? live.balls : 0, st = live ? live.strikes : 0;
-  const k = st >= 2 ? '（押すと三振）' : '';
+  const b = live ? live.balls : 0;
   return [
     { cap: null, items: [
       { result: 'TAKEN', call: 'B', reaction: 'NONE', label: b >= 3 ? '四球' : 'ボール', cls: 'res-TAKEN' },
       { result: 'FOUL', call: null, reaction: null, label: 'ファウル', cls: 'res-FOUL' },
       { result: 'HBP', call: null, reaction: null, label: '死球', cls: 'res-HBP' },
       { result: 'INPLAY', call: null, reaction: null, label: 'インプレー', cls: 'res-INPLAY' }] },
-    { cap: '見逃し' + k, items: [
+    { cap: null, items: [
       { result: 'TAKEN', call: 'S', reaction: 'NONE', label: '見逃(無反)', cls: 'res-TAKEN' },
       { result: 'TAKEN', call: 'S', reaction: 'BAT_OUT', label: '見逃(反有)', cls: 'res-TAKEN' },
       { result: 'TAKEN', call: 'S', reaction: 'CHECK', label: '見逃(バ止)', cls: 'res-TAKEN' }] },
-    { cap: '空振り' + k, items: [
+    { cap: null, items: [
       { result: 'MISS', call: null, reaction: 'TIMED', label: '空振', cls: 'res-MISS' },
       { result: 'MISS', call: null, reaction: 'NO_TIMING', label: '空振(全無)', cls: 'res-MISS' }] }
   ];
@@ -646,19 +645,18 @@ function buildInplayPanel() {
     el('h2', { text: 'B．方向（下が本塁・上が中堅）' }),
     field,
     po ? el('p', { class: 'sub', text: '→ ' + (po === 'PULL' ? '引っ張り' : (po === 'OPPO' ? '流し' : '中央')) }) : null,
-    el('h2', { text: 'C．結果' }),
+    el('h2', { text: 'C．結果（押すと記録して終わり）' }),
     el('div', { class: 'btn-row wrap' }, OUTCOME_ORDER.map(function (o) {
       return el('button', { type: 'button', class: 'btn' + (d.outcome === o ? ' on' : '') + (hints.indexOf(o) >= 0 ? ' hint' : ''), 'data-outcome': o, 'aria-pressed': d.outcome === o ? 'true' : 'false', text: OUTCOME_LABEL[o], onclick: function () { onInplayTap('outcome', o); } });
     }))
   ]);
 }
-// 打球のA・B・C（順は問わない）。3つそろった時点で、Cが失策・野選・打撃妨害なら「アウトの数」へ、ほかは保存
+// 打球のA（種類）・B（方向）は先に押す。C（結果）を押した時点で、Cが失策・野選・打撃妨害なら「アウトの数」へ、ほかは保存
 function onInplayTap(part, value) {
   if (R.isSaving || R.state !== 'AWAIT_INPLAY') return;
   if (typeof awakeTouch === 'function') awakeTouch();
   R.draft[part] = value;
-  const d = R.draft;
-  if (d.kind && d.dir && d.outcome) { onInplayCommit(); return; }
+  if (part === 'outcome') { onInplayCommit(); return; }          // C（結果）を押したら、その打席の記録を終える。A・Bを押していなければ「不明」で残す
   renderRecord();
 }
 function onInplayCommit() {
@@ -774,7 +772,7 @@ function pitchSummary(p) {
   if (p.result === 'TAKEN') s += '（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）';
   if (p.result === 'FOUL' && p.foulType) s += '・' + FOUL_LABEL[p.foulType];
   if (p.inplay) {
-    s += '・' + KIND_LABEL[p.inplay.kind] + '・' + DIR_LABEL[p.inplay.dir] + '・' + OUTCOME_LABEL[p.inplay.outcome];
+    s += '・' + kindText(p.inplay) + '・' + dirText(p.inplay) + '・' + OUTCOME_LABEL[p.inplay.outcome];
     if (Number.isInteger(p.inplay.outsAdded)) s += '（アウト+' + p.inplay.outsAdded + '）';
   }
   if (p.sitEdited) s += '　※帯を直した';

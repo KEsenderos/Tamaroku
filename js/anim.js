@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.13）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.1.14）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -144,6 +144,9 @@ function swingDirOf(pitch, side) {
 const STRIDE_X = { PULL: FOOT_F0[0] - 20, CENTER: FOOT_B0[0] - 34, OPPO: FOOT_B0[0] + 8 };
 const T_CONTACT = T_HIT;                                                                    // 当たる瞬間
 function nzv(v) { const l = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1; return [v[0] / l, v[1] / l]; }
+// 肩・腰の幅（最大）と、横から見たときの厚みの割合。角度0＝正面向きで最も広く、90＝真横向きで最も細い
+const SH_W = 27, HIP_W = 18, BODY_DEPTH = 0.38;
+function projW(W, deg) { const a = deg * Math.PI / 180, c = W * Math.cos(a), d = W * BODY_DEPTH * Math.sin(a); return Math.sqrt(c * c + d * d); }
 function lerpPose(A, B, k) {
   const R = {};
   Object.keys(A).forEach(function (key) {
@@ -156,7 +159,7 @@ function lerpPose(A, B, k) {
   return R;
 }
 function readyPose() {
-  return { hw: 24, hipHW: 14, hipDx: 0, shF: 118, shB: 112, hand: HAND_READY.slice(), bat: BAT_READY.slice(), footF: FOOT_F0.slice(), footB: FOOT_B0.slice(), headDx: -2, lean: 0 };
+  return { ps: 40, ph: 40, hipDx: 0, shF: 118, shB: 112, hand: HAND_READY.slice(), bat: BAT_READY.slice(), footF: FOOT_F0.slice(), footB: FOOT_B0.slice(), headDx: -2, lean: 0 };
 }
 
 // この球の、打者の姿勢（時間 t）。pitch が null のときは構え。
@@ -186,12 +189,12 @@ function poseAt(pitch, t, side) {
   const loadK = easeOut(clamp01((t - 0.08) / 0.18));
   P.hand = [lerp(HAND_READY[0], LOAD_HAND[0], loadK), lerp(HAND_READY[1], LOAD_HAND[1], loadK)];
   P.bat = [lerp(BAT_READY[0], LOAD_BAT[0], loadK), lerp(BAT_READY[1], LOAD_BAT[1], loadK)];
-  P.hw = lerp(24, LOAD_HW, loadK); P.hipHW = lerp(14, 12, loadK); P.lean = LOAD_LEAN * loadK;
+  P.ps = lerp(40, 48, loadK); P.ph = lerp(40, 44, loadK); P.lean = LOAD_LEAN * loadK;
   const coilK = easeOut(clamp01((t - 0.26) / 0.10));
   if (coilK > 0) {
     P.hand = [lerp(LOAD_HAND[0], COIL_HAND[0], coilK), lerp(LOAD_HAND[1], COIL_HAND[1], coilK)];
     P.bat = [lerp(LOAD_BAT[0], COIL_BAT[0], coilK), lerp(LOAD_BAT[1], COIL_BAT[1], coilK)];
-    P.hw = lerp(LOAD_HW, COIL_HW, coilK); P.hipHW = lerp(12, 10, coilK); P.lean = lerp(LOAD_LEAN, COIL_LEAN, coilK);
+    P.ps = lerp(48, 58, coilK); P.ph = lerp(44, 50, coilK); P.lean = lerp(LOAD_LEAN, COIL_LEAN, coilK);
   }
   const planted = Object.assign({}, P, { footF: [strideX, GROUND_Y] });                      // 戻るときの、足が着いたままの構え
   // ③ 振る
@@ -213,7 +216,7 @@ function poseAt(pitch, t, side) {
     const k = easeOut(clamp01((ts - 0.40) / 0.15));
     P.hand = [lerp(COIL_HAND[0], hx + 6, k), lerp(COIL_HAND[1], hy, k)]; P.lean = lerp(COIL_LEAN, -3, k);
     const a = lerp(aR, aC, k); P.bat = [Math.cos(a), Math.sin(a)];
-    P.hw = lerp(COIL_HW, 30, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
+    P.ps = lerp(58, 72, k); P.ph = lerp(50, 72, k); P.shF = lerp(118, 114, k); P.shB = lerp(112, 118, k);
     return P;
   }
   const aSwing = lerp(aR, aC, kBat);
@@ -221,8 +224,8 @@ function poseAt(pitch, t, side) {
   if (ts < tc) {
     swingP.hand = [lerp(COIL_HAND[0], hx, kArm), lerp(COIL_HAND[1], hy, kArm)];
     swingP.bat = [Math.cos(aSwing), Math.sin(aSwing)];
-    swingP.hipHW = lerp(10, 24, hipP); swingP.hipDx = lerp(0, -4, hipP);                       // 腰がまず開く
-    swingP.hw = lerp(COIL_HW, 30, shP);                                                         // つぎに肩が開く
+    swingP.ph = lerp(50, 85, hipP); swingP.hipDx = lerp(0, -4, hipP);                       // 腰がまず開く
+    swingP.ps = lerp(58, 76, shP);                                                         // つぎに肩が開く
     swingP.shF = lerp(118, 112, shP); swingP.shB = lerp(112, 124, shP);
     swingP.lean = lerp(COIL_LEAN, -3, shP);
     swingP.footB = [lerp(FOOT_B0[0], FOOT_B0[0] - 8, hipP), GROUND_Y - 5 * hipP];              // うしろの足のかかとが上がる
@@ -246,8 +249,8 @@ function poseAt(pitch, t, side) {
     P.bat = nzv([q(0), q(1)]);
     P.hand = [lerp(hx - 8, 250, w), lerp(hy - 6, 104, w)];
   }
-  P.hipHW = lerp(24, 27, easeOut(f)); P.hipDx = -4;
-  P.hw = lerp(30, 24, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
+  P.ph = lerp(85, 104, easeOut(f)); P.hipDx = -4;
+  P.ps = lerp(76, 100, easeOut(f)); P.shF = lerp(112, 108, f); P.shB = lerp(124, 112, f);
   P.footB = [FOOT_B0[0] - 8 - 4 * f, GROUND_Y - 5 - 4 * f];
   P.footF = [strideX, GROUND_Y]; P.lean = lerp(-3, 0, f);
   P.headDx = lerp(-4, -10, f);
@@ -308,8 +311,9 @@ function applyPose(parts, P) {
       : [parts.torso, parts.neck, parts.head, parts.brim, parts.armBh, parts.armB, parts.armFh, parts.armF, parts.batH, parts.bat, parts.gripA, parts.gripB];
     order.forEach(function (e) { parts.lean.appendChild(e); });
   }
-  const FS = [CX - P.hw, P.shF], BS = [CX + P.hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
-  const hipF = [CX - P.hipHW + P.hipDx, HIPY], hipB = [CX + P.hipHW + P.hipDx, HIPY];
+  const hw = projW(SH_W, P.ps), hipHW = projW(HIP_W, P.ph);                  // 体の回転角（度）から、見える横幅を出す（回って縦向きになるほど細くなる）
+  const FS = [CX - hw, P.shF], BS = [CX + hw, P.shB];                    // 前の肩（ホーム側）、うしろの肩
+  const hipF = [CX - hipHW + P.hipDx, HIPY], hipB = [CX + hipHW + P.hipDx, HIPY];
   parts.torso.setAttribute('points', pts2([FS, BS, [hipB[0] + 2, HIPY], [hipF[0] - 2, HIPY]]));
   const mid = [(FS[0] + BS[0]) / 2, (FS[1] + BS[1]) / 2];
   const hd = [CX + P.headDx, mid[1] - 30];
