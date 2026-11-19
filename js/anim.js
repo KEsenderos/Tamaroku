@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.2）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.2.1）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -66,11 +66,12 @@ function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見�
   root.appendChild(body);
   const mitt = svgNode('ellipse', { rx: 17, ry: 13, 'class': 'sil-mitt', opacity: 0 });
   const impact = svgNode('polygon', { points: '', 'class': 'sil-impact', opacity: 0 });
+  const trail = svgNode('polyline', { points: '', 'class': 'sil-trail', fill: 'none', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0 });
   const ball = svgNode('circle', { r: 3, 'class': 'sil-ball', opacity: 0 });
-  root.appendChild(mitt); root.appendChild(impact); root.appendChild(ball);
+  root.appendChild(trail); root.appendChild(mitt); root.appendChild(impact); root.appendChild(ball);
   svg.appendChild(root);
   const parts = { svg: svg, side: side, mirror: !!mirror, body: body, lean: lean, legB: legB, legF: legF, footB: footB, footF: footF, torso: torso, neck: neck, head: head, brim: brim,
-    armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, gripA: gripA, gripB: gripB, mitt: mitt, impact: impact, ball: ball, cellHit: cellHit };
+    armB: armB, armBh: armBh, armF: armF, armFh: armFh, bat: bat, batH: batH, gripA: gripA, gripB: gripB, mitt: mitt, impact: impact, trail: trail, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);
   return parts;
@@ -121,6 +122,16 @@ function setBat(parts, px, py, vx, vy) {
 }
 
 // 当たった瞬間の星の大きさ・長さ・とげの数。ふつう（ファウル・単打など）＜長打（二塁打・三塁打）＜本塁打
+// 球種ごとの変化（ゾーン図の座標の px）。g = 投手の「グラブ側」への横の曲がり、d = 下への落ち。マイナスのgは、利き腕側（打者のほうへ）
+const BREAK = { ST: { g: 0, d: 0 }, TW: { g: -10, d: 4 }, CT: { g: 10, d: 3 }, SL: { g: 34, d: 12 }, CV: { g: 16, d: 52 },
+  FK: { g: 0, d: 40 }, CH: { g: -10, d: 22 }, SK: { g: -26, d: 16 }, SP: { g: 0, d: 30 } };
+// 飛んでいる球の、まっすぐな道すじからのずれ。u = 0（手を離れた）〜1（ゾーン）。両はしは0で、後半にはっきり曲がって見えるよう、前半は反対側へふくらむ
+function breakOffset(pitch, u) {
+  const b = BREAK[pitch.pitchType] || { g: 0, d: 0 };
+  const sx = (pitch.pitcher && pitch.pitcher.hand === 'L') ? 1 : -1;      // グラブ側が画面のどちらか（右投手は、画面の左）
+  const k = -2.6 * u * (1 - u);                                           // 曲がる量の割合（マイナス＝曲がる向きと反対へ、いったんふくらむ）
+  return [sx * b.g * k, b.d * k];
+}
 function impactKind(pitch) {
   const o = pitch && pitch.result === 'INPLAY' && pitch.inplay ? pitch.inplay.outcome : null;
   if (o === 'HR') return { scale: 3.6, span: 0.34, spikes: 12 };
@@ -268,7 +279,7 @@ function poseAt(pitch, t, side) {
 function renderFrame(parts, pitch, t, still) {
   const side = parts.side;
   const bxm = function (x) { return side === 'L' ? 320 - x : x; };   // 打者側の座標 → 画面の座標
-  parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0);
+  parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0); parts.trail.setAttribute('opacity', 0);
   if (pitch) {
     const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
     // 球
@@ -276,6 +287,7 @@ function renderFrame(parts, pitch, t, still) {
     if (t < T_HIT) {
       const e = Math.pow(t / T_HIT, 1.6);
       bx = lerp(BALL_START[0], cx, e); by = lerp(BALL_START[1], cy, e); br = lerp(3, 7, e);
+      const bo2 = breakOffset(pitch, e); bx += bo2[0]; by += bo2[1];
     } else {
       const w = clamp01((t - T_HIT) / (1 - T_HIT));
       bx = cx; by = cy;
@@ -289,6 +301,15 @@ function renderFrame(parts, pitch, t, still) {
         const sgn = (pitch.inplay && FIELD_POINTS[pitch.inplay.dir] && FIELD_POINTS[pitch.inplay.dir][0] > 50) ? -1 : 1;
         bx = cx + sgn * 60 * easeOut(w); by = cy - 110 * easeOut(w); br = lerp(7, 3, w); bo = 1 - w;
       }
+    }
+    if (t >= 0.01 && pitch.result !== undefined) {                       // 球の通ってきた道すじ（うすい線）
+      const tt = Math.min(t, T_HIT), pts = [];
+      for (let i = 0; i <= 12; i++) {
+        const u = Math.pow((tt / T_HIT) * i / 12, 1.6), o = breakOffset(pitch, u);
+        pts.push((lerp(BALL_START[0], cx, u) + o[0]).toFixed(1) + ',' + (lerp(BALL_START[1], cy, u) + o[1]).toFixed(1));
+      }
+      parts.trail.setAttribute('points', pts.join(' ')); parts.trail.setAttribute('opacity', 0.55);
+      parts.trail.style.stroke = (typeof typeInfo === 'function') ? typeInfo(pitch.pitchType).color : '#E5E7EB';
     }
     parts.ball.setAttribute('cx', bx.toFixed(1)); parts.ball.setAttribute('cy', by.toFixed(1)); parts.ball.setAttribute('r', br.toFixed(1));
     parts.ball.setAttribute('opacity', (t < 0.01 ? 0 : bo).toFixed(2));

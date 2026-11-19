@@ -1,5 +1,5 @@
 'use strict';
-// db.js（球録 v0.2）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
+// db.js（球録 v0.2.1）IndexedDB の読み書き・書き出し・取り込み。画面にはさわらない（通知は kyrOn… の関数を呼ぶだけ）
 let _db = null;
 let _dbOpening = null;
 
