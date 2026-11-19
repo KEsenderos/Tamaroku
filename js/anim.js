@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.1.14）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.2）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BAT_LEN = 108;
@@ -120,6 +120,13 @@ function setBat(parts, px, py, vx, vy) {
   parts.batH.setAttribute('points', mkPoly(2.5));
 }
 
+// 当たった瞬間の星の大きさ・長さ・とげの数。ふつう（ファウル・単打など）＜長打（二塁打・三塁打）＜本塁打
+function impactKind(pitch) {
+  const o = pitch && pitch.result === 'INPLAY' && pitch.inplay ? pitch.inplay.outcome : null;
+  if (o === 'HR') return { scale: 3.6, span: 0.34, spikes: 12 };
+  if (o === 'H2' || o === 'H3') return { scale: 2.2, span: 0.26, spikes: 10 };
+  return { scale: 1, span: 0.18, spikes: 8 };
+}
 function foulScreenDir(pitch) {                    // 画面での飛ぶ向き（投手から見た絵。一塁側は画面の左）
   switch (pitch.foulDir) {
     case 'F1B': return [-1, 0];
@@ -291,9 +298,10 @@ function renderFrame(parts, pitch, t, still) {
       parts.mitt.setAttribute('opacity', (0.55 * clamp01((t - T_HIT) / 0.1)).toFixed(2));
     }
     if (t >= T_HIT && (pitch.result === 'FOUL' || pitch.result === 'INPLAY' || pitch.result === 'HBP')) {
-      const w = clamp01((t - T_HIT) / 0.18);
-      const R0 = 6 + 14 * w, pts = [];
-      for (let i = 0; i < 16; i++) { const r = (i % 2 === 0) ? R0 : R0 * 0.45, an = Math.PI * 2 * i / 16; pts.push((cx + Math.cos(an) * r).toFixed(1) + ',' + (cy + Math.sin(an) * r).toFixed(1)); }
+      const ik = impactKind(pitch);                                                // 当たりの大きさ：ふつう／長打（二塁打・三塁打）／本塁打
+      const w = clamp01((t - T_HIT) / ik.span);
+      const R0 = 6 + 14 * ik.scale * w, pts = [], n = ik.spikes;
+      for (let i = 0; i < n * 2; i++) { const r = (i % 2 === 0) ? R0 : R0 * 0.45, an = Math.PI * 2 * i / (n * 2); pts.push((cx + Math.cos(an) * r).toFixed(1) + ',' + (cy + Math.sin(an) * r).toFixed(1)); }
       parts.impact.setAttribute('points', pts.join(' '));
       parts.impact.setAttribute('opacity', (1 - w).toFixed(2));
     }

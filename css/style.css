@@ -227,3 +227,12 @@ button:disabled { opacity: .45; cursor: default; }
 .batter-next { display: block; font-size: 12px; font-weight: 400; }
 
 .res-cap { margin: 6px 0 2px; font-size: 13px; color: var(--kyr-sub); font-weight: 700; }
+
+/* 記録タブの画面遷移（①状況・打者 ②結果 ③コース・球種 ④くわしく） */
+.step-nav { display: flex; gap: 4px; }
+.step-chip { flex: 1 1 0; min-width: 0; text-align: center; font-size: 13px; line-height: 1.2; padding: 6px 2px; border: 1px solid var(--kyr-line); border-radius: 8px; color: var(--kyr-sub); }
+.step-chip.on { background: var(--kyr-accent); border-color: var(--kyr-accent); color: #fff; font-weight: 700; }
+.sum-card { display: flex; flex-direction: column; gap: 6px; }
+.sum-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; }
+.btn.wide { width: 100%; }
+.back-btn { align-self: flex-start; }

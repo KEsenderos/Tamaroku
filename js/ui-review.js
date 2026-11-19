@@ -1,5 +1,5 @@
 'use strict';
-// ui-review.js（球録 v0.1.14）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
+// ui-review.js（球録 v0.2）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
 // 表示するだけで、「次はこの球」「待っている球」のような予想は出さない
 
 const RV = {
@@ -56,15 +56,13 @@ function reactionText(p) {
   return RESULT_LABEL[p.result];
 }
 function marksText(p) { return p.marks && p.marks.length ? '【' + p.marks.map(function (m) { return MARK_LABEL[m]; }).join('・') + '】' : ''; }
-function afterText(p, pa) {                      // この球のあと（カウント、または打席の結果）
+// 打席の最後の球の、結果の印（＜…＞）。結果の行の終わりに足す（下の行を増やさず、行数を変えないため）
+function endMark(p, pa) {
   const lastInPa = RV.pitches.filter(function (x) { return x.paId === p.paId; }).reduce(function (m, x) { return Math.max(m, x.paSeq); }, 0) === p.paSeq;
-  const cnt = applyPitchToCount(p.sit.balls, p.sit.strikes, { result: p.result, takenCall: p.takenCall, caught: p.marks.indexOf('CAUGHT_OUT') >= 0 });
-  if (lastInPa && pa) {
-    if (pa.endType === 'SKIPPED') return '打席の終わりの球が記録されていません';
-    if (pa.endType === 'INPLAY' && pa.outcome) return '打席の結果：' + OUTCOME_LABEL[pa.outcome];
-    if (pa.endType) return '打席の結果：' + END_LABEL[pa.endType];
-  }
-  return 'B' + cnt.balls + ' S' + cnt.strikes + ' になった';
+  if (!lastInPa || !pa || !pa.endType) return '';
+  if (pa.endType === 'SKIPPED') return '＜打席の終わりの球は未記録＞';
+  if (pa.endType === 'INPLAY' || pa.endType === 'HBP') return '＜打席結果＞';
+  return '＜' + END_LABEL[pa.endType] + '＞';
 }
 
 // ---- 読み込みと全体 ----
@@ -148,7 +146,7 @@ function buildPlay() {
   const fdWrap = el('div', { class: 'fd-wrap' }, field);
   const info = {
     type: el('p', { id: 'rv-type-line', class: 'rv-type' }), react: el('p', { id: 'rv-react', class: 'rv-react' }),
-    after: el('p', { id: 'rv-after', class: 'sub tiny' }), who: el('p', { id: 'rv-who', class: 'sub tiny' })
+    who: el('p', { id: 'rv-who', class: 'sub tiny' })
   };
   const btn = function (id, label, fn) { return el('button', { type: 'button', class: 'btn small', id: id, text: label, onclick: fn }); };
   const next = el('button', { type: 'button', class: 'btn primary big-next', id: 'rv-next', text: '次の球', onclick: function () { rvStep(1); } });
@@ -162,7 +160,7 @@ function buildPlay() {
   drawField(field);
   const box = el('div', { class: 'play' }, [
     el('div', { class: 'stage' }, [svg, fdWrap]),
-    el('div', { class: 'card play-text' }, [info.type, info.react, info.who, info.after]),
+    el('div', { class: 'card play-text' }, [info.type, info.react, info.who]),
     el('div', { class: 'play-ctl' }, [
       el('div', { class: 'btn-row' }, [prev, next]),
       el('div', { class: 'btn-row sub-row' }, [again, first])
@@ -183,17 +181,15 @@ function rvShow(animate) {
   pl.fdWrap.className = 'fd-wrap off';
   if (i < 0) {
     inf.type.textContent = '「次の球」を押すと、1球ずつ再生します'; inf.react.textContent = ''; inf.react.className = 'rv-react';
-    inf.who.textContent = '全 ' + n + ' 球'; inf.after.textContent = '';
+    inf.who.textContent = '全 ' + n + ' 球';
     drawSilhouette(pl.svg, (RV.list[0] && rvPaOf(RV.list[0])) ? rvPaOf(RV.list[0]).side : 'R', true); drawField(pl.field);
     return;
   }
   const p = RV.list[i]; const pa = rvPaOf(p); const side = pa ? pa.side : 'R';
   inf.type.textContent = rvTypeName(p.pitchType) + '　' + zoneLabel(p.row, p.col, side);
-  inf.react.textContent = reactionText(p) + ' ' + marksText(p);
+  inf.react.textContent = reactionText(p) + endMark(p, pa) + ' ' + marksText(p) + (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
   inf.react.className = 'rv-react rr-' + p.result;
   setKids(inf.who, ['第' + (pa ? pa.paNo : '?') + '打席 ' + (pa ? pa.batterName : '') + '（' + sideLabel(side) + '）　', pitchNo(p, pa), '　', rvBso(p.sit.balls, p.sit.strikes), '　' + (i + 1) + '/' + n + '球']);
-  const aft = afterText(p, pa), tail = (p.sitEdited ? '　※状況を修正' : '') + (p.memo ? '　メモ：' + p.memo : '');
-  inf.after.textContent = /^B\d S\d になった$/.test(aft) ? tail.replace(/^　/, '') : aft + tail;       // カウントは上の段に出ているので、ここには出さない
   if (!pl.svg._parts || pl.svg._parts.side !== side) { drawSilhouette(pl.svg, side, true); }
   pl.fdWrap.className = 'fd-wrap ' + (fieldDest(p) ? (side === 'R' ? 'at-right' : 'at-left') : 'off');
   playMotion(pl.svg, p, { field: pl.field });

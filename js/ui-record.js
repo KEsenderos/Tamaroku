@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.1.14）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.2）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -162,6 +162,41 @@ async function runSaving(fn) {
 }
 
 // ---- 描画 ----
+// 記録タブの画面：① 状況・投手・打者 → ② 結果 → ③ コース・球種 → ④ ファウル・インプレーのくわしい結果
+function recordScreen() {
+  if (R.state === 'IDLE' || (R.showSit && R.state === 'AWAIT_RESULT')) return 1;
+  if (R.state === 'AWAIT_RESULT') return 2;
+  if (R.state === 'AWAIT_ZONE' || R.state === 'AWAIT_TYPE') return 3;
+  return 4;
+}
+const STEP_NAMES = ['① 状況・打者', '② 結果', '③ コース・球種', '④ くわしく'];
+function buildStepNav(scr) {
+  return el('div', { id: 'step-nav', class: 'step-nav', role: 'list' }, STEP_NAMES.map(function (n, i) {
+    return el('span', { class: 'step-chip' + (scr === i + 1 ? ' on' : ''), role: 'listitem', 'aria-current': scr === i + 1 ? 'step' : null, text: n });
+  }));
+}
+// ②〜④の画面の上に出す、いまの状況の要約（押すと①へ）
+function buildSitSummary() {
+  const s = R.game.liveSit, t = sitText(s), pa = curPa(), p = curPitcher();
+  const runners = [[1, '一'], [2, '二'], [4, '三']].filter(function (d) { return (s.runners & d[0]) !== 0; }).map(function (d) { return d[1]; }).join('・');
+  return el('div', { id: 'sit-summary', class: 'card sum-card' }, [
+    el('p', { class: 'sum-line' }, [
+      el('strong', { text: t.inning + '　' }), bsoGroup('B', 'b', s.balls, 3), bsoGroup('S', 's', s.strikes, 2), bsoGroup('O', 'o', s.outs, 2),
+      el('span', { text: '　走者：' + (runners || 'なし') })
+    ]),
+    el('p', { class: 'sum-line sub' }, [el('span', { text: '投手：' + p.name + '（' + (p.hand === 'R' ? '右' : '左') + '）　打者：' + (pa ? pa.batterName + '（' + (pa.side === 'R' ? '右' : '左') + '）' : '') + '　' + (pa ? pa.paNo + '打席目' : '') })]),
+    R.state === 'AWAIT_RESULT' ? el('button', { type: 'button', class: 'btn small', id: 'to-sit-btn', text: '① 状況・打者を直す', onclick: function () { R.showSit = true; renderRecord(); } }) : null
+  ]);
+}
+function backToResult() {
+  if (R.isSaving) return;
+  R.draft = null; R.state = R.game.liveSit.openPaId ? 'AWAIT_RESULT' : 'IDLE'; renderRecord();
+}
+function backToZone() {
+  if (R.isSaving) return;
+  if (R.draft) { R.draft.foulType = null; R.draft.foulDir = undefined; R.draft.kind = null; R.draft.dir = null; R.draft.outcome = null; R.draft.outsAdded = null; }
+  R.state = 'AWAIT_TYPE'; renderRecord();
+}
 function renderRecord() {
   const panel = document.getElementById('panel-record');
   if (!panel) return;
@@ -180,16 +215,30 @@ function renderRecord() {
   if (!R.game) {
     kids.push(buildStartForm());
   } else {
-    kids.push(buildSituationBar());
-    kids.push(buildGameLine());
-    if (R.form === 'pitcher') kids.push(buildPitcherChangeForm());
-    if (R.form === 'batter') kids.push(buildBatterSwapForm());
-    kids.push(buildBatterBar());
-    kids.push(buildResultBar());
-    kids.push(buildZone());
-    kids.push(buildStepArea());
+    if (R.state !== 'AWAIT_RESULT') R.showSit = false;
+    const scr = recordScreen();
+    kids.push(buildStepNav(scr));
+    if (scr === 1) {                                                   // ① 状況・投手・打者
+      kids.push(buildSituationBar());
+      kids.push(buildGameLine());
+      if (R.form === 'pitcher') kids.push(buildPitcherChangeForm());
+      if (R.form === 'batter') kids.push(buildBatterSwapForm());
+      kids.push(buildBatterBar());
+      if (R.state === 'AWAIT_RESULT') kids.push(el('button', { type: 'button', class: 'btn primary wide', id: 'to-result-btn', text: '② 結果の入力へ', onclick: function () { R.showSit = false; R.editing = null; renderRecord(); } }));
+    } else {
+      kids.push(buildSitSummary());
+      if (scr === 2) kids.push(buildResultBar());                      // ② 結果
+      else if (scr === 3) {                                            // ③ コース・球種
+        kids.push(el('button', { type: 'button', class: 'btn back-btn', id: 'back-result-btn', text: '← ② 結果を選び直す', onclick: backToResult }));
+        kids.push(buildZone());
+        kids.push(buildStepArea());
+      } else {                                                         // ④ ファウル・インプレーのくわしい結果
+        kids.push(el('button', { type: 'button', class: 'btn back-btn', id: 'back-zone-btn', text: '← ③ コース・球種に戻る', onclick: backToZone }));
+        kids.push(buildStepArea());
+      }
+    }
     kids.push(buildUndoRow());
-    kids.push(buildRecentList());
+    if (scr <= 2) kids.push(buildRecentList());
   }
   panel.appendChild(el('div', { class: 'stack' }, kids));
   fillNameSuggestions();
