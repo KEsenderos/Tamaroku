@@ -1,5 +1,5 @@
 'use strict';
-// anim.js（球録 v0.3）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.3.1）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
 const BALL_START = [160, 34];
@@ -93,12 +93,56 @@ function impactKind(pitch) {
   if (o === 'H2' || o === 'H3') return { scale: 2.2, span: 0.26, spikes: 10 };
   return { scale: 1, span: 0.18, spikes: 8 };
 }
-function foulScreenDir(pitch) {                    // 画面での飛ぶ向き（投手から見た絵。一塁側は画面の左）
+// ---- 打った後の球の動き（球審の視点：遠ざかるほど小さく、こちらへ来るほど大きく）----
+const BALL_R_PITCH = [2, 8];                      // 投球：手を離れたとき → ゾーンに着くときの半径
+const OWN_BALL_POINT = [264, 250];                // 自打球が当たる打者のすね（打者側の座標。右打者基準）
+const T_OWN = T_HIT + 0.30 * (1 - T_HIT);          // 自打球が打者に当たる時刻
+function sideFoulPath(c, sgn, w, far, rEnd) {      // 一塁側・三塁側へのファウル：ゾーンの横へ大きく流れ、画面の外へ出ていく（ファウルゾーン）
+  const e = Math.pow(w, 0.8);
+  return { x: c[0] + sgn * far * e, y: c[1] - 62 * Math.sin(Math.PI * w * 0.8) + 46 * w * w, r: lerp(8, rEnd, w), o: w < 0.8 ? 1 : (1 - w) / 0.2 };
+}
+function backPopPath(c, w) {                       // 後方好打：真上へ高く上がる内野フライ。こちら（球審）の頭上を越えるように、だんだん大きくなる
+  const e = easeOut(w);
+  return { x: c[0], y: c[1] - 215 * e, r: 8 + 11 * Math.pow(w, 1.2), o: w < 0.85 ? 1 : (1 - w) / 0.15 };
+}
+function backCutPath(c, w, oppoSgn) {              // カット：やや流し方向（逆方向）へ、後ろへ低めに飛ぶ。大きくなりながら横へそれる
+  const e = easeOut(w);
+  return { x: c[0] + oppoSgn * 78 * e, y: c[1] - 105 * e, r: 8 + 9 * Math.pow(w, 1.1), o: w < 0.85 ? 1 : (1 - w) / 0.15 };
+}
+function backGroundPath(c, w) {                    // 下かすり：バットの下に当たるので、下へ落ちて地面ではね、後ろへ転がる（大きくなる）
+  const wg = 0.5, gy = GROUND_Y - 4;
+  const y = w < wg ? lerp(c[1], gy, easeIn(w / wg)) : gy - 34 * Math.sin(Math.PI * (w - wg) / (1 - wg));
+  return { x: c[0], y: y, r: 8 + 7 * Math.pow(w, 1.1), o: w < 0.9 ? 1 : (1 - w) / 0.1 };
+}
+function ownBallPath(c, side, w) {                 // 自打球：打者のすねに当たり（星）、足もとへ落ちて転がる
+  const tc = (T_OWN - T_HIT) / (1 - T_HIT);
+  const P = [side === 'L' ? 320 - OWN_BALL_POINT[0] : OWN_BALL_POINT[0], OWN_BALL_POINT[1]];
+  const away = side === 'L' ? 1 : -1;
+  if (w < tc) { const k = easeIn(w / tc); return { x: lerp(c[0], P[0], k), y: lerp(c[1], P[1], k), r: 8, o: 1, hit: P }; }
+  const v = (w - tc) / (1 - tc), gy = GROUND_Y - 5;
+  const y = lerp(P[1], gy, easeIn(Math.min(1, v / 0.5))) - (v > 0.5 ? 16 * Math.sin(Math.PI * (v - 0.5) / 0.5) : 0);
+  return { x: P[0] + away * 40 * easeOut(v), y: y, r: 8 - 2 * v, o: v < 0.85 ? 1 : (1 - v) / 0.15, hit: P };
+}
+function inplayPath(pitch, c, w) {                 // 打球：打った球は、遠ざかって小さくなる
+  const sgn = (pitch.inplay && FIELD_POINTS[pitch.inplay.dir] && FIELD_POINTS[pitch.inplay.dir][0] > 50) ? -1 : 1;
+  return { x: c[0] + sgn * 60 * easeOut(w), y: c[1] - 110 * easeOut(w), r: lerp(8, 1.8, easeOut(w)), o: 1 - w };
+}
+// ファウルの球の動き。種類（foulType）で決め、「その他」だけは方向（foulDir）で決める
+function foulPath(pitch, c, w, side) {
+  const oppoSgn = side === 'R' ? -1 : 1;           // 逆方向（流し）：右打者は一塁側（画面の左）、左打者は三塁側（画面の右）
+  switch (pitch.foulType) {
+    case 'OWN_BALL': return ownBallPath(c, side, w);
+    case 'UNDER_NICK': return backGroundPath(c, w);
+    case 'BACK_GOOD': return backPopPath(c, w);
+    case 'CUT': return backCutPath(c, w, oppoSgn);
+    default: break;
+  }
   switch (pitch.foulDir) {
-    case 'F1B': return [-1, 0];
-    case 'F3B': return [1, 0];
-    case 'FBK': return [0, -1];
-    default: return [-0.6, -0.8];
+    case 'F1B': return sideFoulPath(c, -1, w, 250, 4);
+    case 'F3B': return sideFoulPath(c, 1, w, 250, 4);
+    case 'FBK': return backPopPath(c, w);
+    case 'FLN': return sideFoulPath(c, -1, w, 290, 3);
+    default: return sideFoulPath(c, -1, w, 250, 4);
   }
 }
 function isSwing(pitch) { return pitch.result === 'MISS' || pitch.result === 'FOUL' || pitch.result === 'INPLAY'; }
@@ -159,25 +203,19 @@ function renderFrame(parts, pitch, t, still) {
   parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0); parts.trail.setAttribute('opacity', 0);
   if (pitch) {
     const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
-    // 球
-    let bx, by, br = 7, bo = 1;
+    // 球（球審の視点：投げた球は遠くから近づいて大きくなり、打った球は遠ざかって小さくなる／ファウルは種類ごとに動く）
+    let bx, by, br = BALL_R_PITCH[1], bo = 1, hit = [cx, cy];
     if (t < T_HIT) {
       const e = Math.pow(t / T_HIT, 1.6);
-      bx = lerp(BALL_START[0], cx, e); by = lerp(BALL_START[1], cy, e); br = lerp(3, 7, e);
+      bx = lerp(BALL_START[0], cx, e); by = lerp(BALL_START[1], cy, e); br = lerp(BALL_R_PITCH[0], BALL_R_PITCH[1], e);
       const bo2 = breakOffset(pitch, e); bx += bo2[0]; by += bo2[1];
     } else {
       const w = clamp01((t - T_HIT) / (1 - T_HIT));
       bx = cx; by = cy;
-      if (pitch.result === 'FOUL' && pitch.foulType === 'OWN_BALL') {
-        bx = lerp(cx, bxm(262), easeIn(w)); by = lerp(cy, GROUND_Y - 4, easeIn(w)); br = 6;
-      } else if (pitch.result === 'FOUL') {
-        const d = foulScreenDir(pitch), far = pitch.foulDir === 'FBK' ? 260 : 140;       // 後方（バックネット）へのファウルは、真上へ高く上がる
-        const ww = pitch.foulDir === 'FBK' ? w : easeOut(w);
-        bx = cx + d[0] * far * ww; by = cy + d[1] * far * ww; br = lerp(7, 3, w); bo = pitch.foulDir === 'FBK' ? 1 - 0.3 * w : 1 - 0.7 * w;
-      } else if (pitch.result === 'INPLAY') {
-        const sgn = (pitch.inplay && FIELD_POINTS[pitch.inplay.dir] && FIELD_POINTS[pitch.inplay.dir][0] > 50) ? -1 : 1;
-        bx = cx + sgn * 60 * easeOut(w); by = cy - 110 * easeOut(w); br = lerp(7, 3, w); bo = 1 - w;
-      }
+      let q = null;
+      if (pitch.result === 'FOUL') q = foulPath(pitch, [cx, cy], w, side);
+      else if (pitch.result === 'INPLAY') q = inplayPath(pitch, [cx, cy], w);
+      if (q) { bx = q.x; by = q.y; br = q.r; bo = q.o; if (q.hit) hit = q.hit; }
     }
     if (t >= 0.01 && pitch.result !== undefined) {                       // 球の通ってきた道すじ（うすい線）
       const tt = Math.min(t, T_HIT), pts = [];
@@ -198,10 +236,15 @@ function renderFrame(parts, pitch, t, still) {
     if (t >= T_HIT && (pitch.result === 'FOUL' || pitch.result === 'INPLAY' || pitch.result === 'HBP')) {
       const ik = impactKind(pitch);                                                // 当たりの大きさ：ふつう／長打（二塁打・三塁打）／本塁打
       const w = clamp01((t - T_HIT) / ik.span);
-      const R0 = 6 + 14 * ik.scale * w, pts = [], n = ik.spikes;
-      for (let i = 0; i < n * 2; i++) { const r = (i % 2 === 0) ? R0 : R0 * 0.45, an = Math.PI * 2 * i / (n * 2); pts.push((cx + Math.cos(an) * r).toFixed(1) + ',' + (cy + Math.sin(an) * r).toFixed(1)); }
+      const pts = [], n = ik.spikes;
+      let hx = cx, hy = cy, ww = w;
+      if (pitch.result === 'FOUL' && pitch.foulType === 'OWN_BALL') {                // 自打球：まずバットに当たった星、つづいて打者の体に当たった星
+        if (t >= T_OWN) { hx = hit[0]; hy = hit[1]; ww = clamp01((t - T_OWN) / ik.span); }
+      }
+      const R0 = 6 + 14 * ik.scale * ww;
+      for (let i = 0; i < n * 2; i++) { const r = (i % 2 === 0) ? R0 : R0 * 0.45, an = Math.PI * 2 * i / (n * 2); pts.push((hx + Math.cos(an) * r).toFixed(1) + ',' + (hy + Math.sin(an) * r).toFixed(1)); }
       parts.impact.setAttribute('points', pts.join(' '));
-      parts.impact.setAttribute('opacity', (1 - w).toFixed(2));
+      parts.impact.setAttribute('opacity', (1 - ww).toFixed(2));
     }
     if (t >= T_HIT) { parts.cellHit.setAttribute('x', ZX0 + ZCELL * (pitch.col - 1)); parts.cellHit.setAttribute('y', ZY0 + ZCELL * (pitch.row - 1)); parts.cellHit.setAttribute('opacity', 1); }
   }

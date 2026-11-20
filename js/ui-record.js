@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.3）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.3.1）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -539,7 +539,7 @@ function resultRows() {
     { cap: null, items: [
       { result: 'TAKEN', call: 'S', reaction: 'NONE', label: '見逃(無反)', cls: 'res-TAKEN' },
       { result: 'TAKEN', call: 'S', reaction: 'BAT_OUT', label: '見逃(反有)', cls: 'res-TAKEN' },
-      { result: 'TAKEN', call: 'S', reaction: 'CHECK', label: '見逃(バ止)', cls: 'res-TAKEN' }] },
+      { result: 'TAKEN', call: 'B', reaction: 'CHECK', label: '見逃(バ止)', cls: 'res-TAKEN' }] },
     { cap: null, items: [
       { result: 'MISS', call: null, reaction: 'TIMED', label: '空振', cls: 'res-MISS' },
       { result: 'MISS', call: null, reaction: 'NO_TIMING', label: '空振(全無)', cls: 'res-MISS' }] }
