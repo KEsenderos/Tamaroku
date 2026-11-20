@@ -141,7 +141,6 @@ button:disabled { opacity: .45; cursor: default; }
 .sz-strike { fill: none; stroke: var(--kyr-text); stroke-width: 2.5; }
 .sz-hit { fill: none; stroke: var(--kyr-accent-text); stroke-width: 4; }
 .sil-fill { fill: var(--kyr-text); }
-.sil-limb { stroke: var(--kyr-text); stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .sil-ground { stroke: var(--kyr-line); stroke-width: 2; }
 .sil-mitt { fill: var(--kyr-sub); }
 .sil-impact { fill: var(--kyr-flash); stroke: var(--kyr-text); stroke-width: 1.5; }
@@ -173,9 +172,6 @@ button:disabled { opacity: .45; cursor: default; }
 .tbl th, .tbl td { border: 1px solid var(--kyr-line); padding: 4px 6px; text-align: right; } .tbl th { text-align: left; background: var(--kyr-zone-out); }
 .scroll-x { overflow-x: auto; }
 .card h3 { margin: 10px 0 4px; font-size: 15px; }
-.sil-round { stroke: var(--kyr-text); stroke-linejoin: round; }
-.sil-halo { stroke: var(--kyr-surface); stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.sil-halo-fill { fill: var(--kyr-surface); }
 
 /* ---- BSOの丸（ボール＝黄・ストライク＝緑・アウト＝赤） ---- */
 .bso-g { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
@@ -207,7 +203,6 @@ button:disabled { opacity: .45; cursor: default; }
 .zone-row .cell { min-height: 0; min-width: 0; }
 .zone-batter { flex-basis: 24%; width: 24%; }
 
-.sil-grip { fill: var(--kyr-text); stroke: var(--kyr-surface); stroke-width: 2; }
 /* 記録タブ：ゾーンの上に、打者を大きく・うっすら重ねる（押す操作はゾーンに通る） */
 .zone-stage { position: relative; max-width: 360px; margin: 0 auto; }
 .zone-stage .zone { max-width: none; margin: 0; }
