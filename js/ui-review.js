@@ -1,5 +1,5 @@
 'use strict';
-// ui-review.js（球録 v0.3.1）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
+// ui-review.js（球録 v0.3.6）振り返りタブ：試合・打者を選び、「再生」（次の球ボタン）・一覧・ゾーン図・傾向で見る（11章）。
 // 表示するだけで、「次はこの球」「待っている球」のような予想は出さない
 
 const RV = {
@@ -49,7 +49,7 @@ function setKids(node, kids) { while (node.firstChild) node.removeChild(node.fir
 // 1球の説明（文字だけ。短く）
 function reactionText(p) {
   if (p.result === 'TAKEN') return '見逃し（' + (p.takenCall === 'S' ? 'ストライク' : 'ボール') + '）' + reactSuffix(p);
-  if (p.result === 'MISS') return '空振り' + reactSuffix(p);
+  if (p.result === 'MISS') return '空振り（ストライク）' + reactSuffix(p);
   if (p.result === 'HBP') return '死球';
   if (p.result === 'FOUL') return 'ファウル（' + (p.foulType ? FOUL_LABEL[p.foulType] : '') + (p.foulDir ? '・' + FOULDIR_LABEL[p.foulDir] : '') + '）';
   if (p.result === 'INPLAY' && p.inplay) return '打った：' + kindText(p.inplay) + '・' + dirText(p.inplay) + '・' + OUTCOME_LABEL[p.inplay.outcome];

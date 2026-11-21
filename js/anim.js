@@ -1,7 +1,8 @@
 'use strict';
-// anim.js（球録 v0.3.1）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
+// anim.js（球録 v0.3.6）シルエットの打者と、打撃のモーション（11.4）。SVGの図形だけで描く（画像・既存の絵は使わない。顔・背番号は描かない）
 const SVGNS = 'http://www.w3.org/2000/svg';
 const ZX0 = 85, ZY0 = 70, ZCELL = 30;            // ゾーンの図（5×5）の左上と1マスの大きさ（SVGの座標）
+let BAT_CLIP_SEQ = 0;
 const BALL_START = [160, 34];
 const T_HIT = 0.57;                               // 球がゾーンに着く（打つ）瞬間（0〜1）
 const GROUND_Y = 286;
@@ -28,6 +29,24 @@ const SP_PLANT = 33;                    // 足を踏み出し終えた（バッ�
 // 当たる瞬間のバットの芯の位置（絵の座標）。コマごと（振りの途中ほど体の近く、振り切るほど遠く）。球のマスにいちばん近いコマを「当たるコマ」に選ぶ
 const SP_BARRELS = { 39: [206, 150], 40: [202, 154], 42: [168, 185], 43: [128, 193], 44: [127, 192], 45: [145, 181] };
 const SP_FEET_X = 275, SP_GROUND = 290; // 体の軸（足もとの中心）と、靴底の高さ
+
+// バットだけを球へ向ける（v0.3.6）。コマ42〜47は、動画のバット（体と同じ1つの輪郭）を、手もとで切り落とし、描き足したバットに置き換える
+// 手もと（バットのつけ根）の位置・元のバットの向き（つけ根→先）・元の見かけの長さ（コマごと。バットが奥や手前を向くと、見かけは短い）。投手から見た絵の座標
+const SP_BAT = { 42: { p: [191, 165], t: [158.5, 186.3] }, 43: { p: [191, 163], t: [119, 195.6] }, 44: { p: [190, 162], t: [118, 193.4] },
+  45: { p: [191, 159], t: [135.8, 181.3] }, 46: { p: [191, 159], t: [135.8, 181.3] }, 47: { p: [194, 155], t: [158.3, 167.8] } };
+const BAT_BARREL = 0.88;                    // 芯（球に当てる所）の位置：つけ根から先までの長さの何割か（元の動画のコマ43で 0.88）
+const BAT_LEN_MIN = 38, BAT_LEN_MAX = 88;   // 見かけの長さの下限・上限（短くなる＝先が手前を向く。長くなる＝腕ごと伸ばす分）
+const BAT_FADE = 6;                         // 当たったあと、向きのずれが消えていくコマ数
+function batG(fi, fc) {                      // コマ fi で、球へ向ける度合い（0〜1）。fc＝当たるコマ
+  if (fc < 42 || fi < 42 || fi > 47) return 0;
+  if (fi <= fc) return (fi - 41) / (fc - 41);
+  return Math.max(0, 1 - (fi - fc) / BAT_FADE);
+}
+function batGeom(fi) {                       // 元のバット：{ px, py, ang, len }
+  const B = SP_BAT[fi]; if (!B) return null;
+  const dx = B.t[0] - B.p[0], dy = B.t[1] - B.p[1];
+  return { px: B.p[0], py: B.p[1], ang: Math.atan2(dy, dx), len: Math.sqrt(dx * dx + dy * dy) };
+}
 const SP_STRIDED = 36;                  // 踏み出して、バットが動きだすコマ
 const SP_FPT = 45;                      // スイング中の速さ（t が 1 進むあいだに進むコマ数。動画の速さ 36 の約1.25倍）
 // 動き：時間 t（0〜1）→ コマ番号。足上げ・踏み出し → 振る（T_HIT で当たる）→ 振り抜いて肩に巻く（〜1）
@@ -53,15 +72,24 @@ function drawSilhouette(svg, side, mirror) {   // mirror=true：捕手から見�
   const mk = function (tag, cls, extra) { const e = svgNode(tag, Object.assign({ 'class': cls }, extra || {})); return e; };
   const fig = svgNode('g', {});                                                    // 体を伸び縮み・ずらす入れ物
   const sprite = mk('path', 'sil-fill sil-sprite', { 'fill-rule': 'evenodd', d: SPRITE_FRAMES[0] });
-  fig.appendChild(sprite); body.appendChild(fig);
+  fig.appendChild(sprite);
+  const bat = svgNode('polygon', { points: '', 'class': 'sil-fill sil-bat', opacity: 0 });                  // 球へ向けるバット（コマ42〜47）
+  fig.appendChild(bat);
+  const clipId = 'kyr-batclip-' + (++BAT_CLIP_SEQ);
+  const clipPath = svgNode('clipPath', { id: clipId, clipPathUnits: 'userSpaceOnUse' });
+  const clipRect = svgNode('rect', { x: 191, y: -100, width: 600, height: 600 });
+  clipPath.appendChild(clipRect); svg.appendChild(clipPath);
+  body.appendChild(fig);
   root.appendChild(body);
   const mitt = svgNode('ellipse', { rx: 17, ry: 13, 'class': 'sil-mitt', opacity: 0 });
   const impact = svgNode('polygon', { points: '', 'class': 'sil-impact', opacity: 0 });
+  const impact2 = svgNode('polygon', { points: '', 'class': 'sil-impact2', opacity: 0 });                  // 本塁打：星の中の、小さなもう1つの星（色がちがう）
+  const ring = svgNode('circle', { r: 1, 'class': 'sil-ring', fill: 'none', opacity: 0 });                 // 本塁打：外へ広がる光の輪
   const trail = svgNode('polyline', { points: '', 'class': 'sil-trail', fill: 'none', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0 });
   const ball = svgNode('circle', { r: 3, 'class': 'sil-ball', opacity: 0 });
-  root.appendChild(trail); root.appendChild(mitt); root.appendChild(impact); root.appendChild(ball);
+  root.appendChild(trail); root.appendChild(mitt); root.appendChild(ring); root.appendChild(impact); root.appendChild(impact2); root.appendChild(ball);
   svg.appendChild(root);
-  const parts = { svg: svg, side: side, mirror: !!mirror, body: body, fig: fig, sprite: sprite, _f: 0, mitt: mitt, impact: impact, trail: trail, ball: ball, cellHit: cellHit };
+  const parts = { svg: svg, side: side, mirror: !!mirror, body: body, fig: fig, sprite: sprite, bat: bat, clipId: clipId, clipRect: clipRect, _f: 0, mitt: mitt, impact: impact, impact2: impact2, ring: ring, trail: trail, ball: ball, cellHit: cellHit };
   svg._parts = parts;
   renderFrame(parts, null, 0, false);
   return parts;
@@ -89,9 +117,10 @@ function breakOffset(pitch, u) {
 }
 function impactKind(pitch) {
   const o = pitch && pitch.result === 'INPLAY' && pitch.inplay ? pitch.inplay.outcome : null;
-  if (o === 'HR') return { scale: 3.6, span: 0.34, spikes: 12 };
-  if (o === 'H2' || o === 'H3') return { scale: 2.2, span: 0.26, spikes: 10 };
-  return { scale: 1, span: 0.18, spikes: 8 };
+  if (o === 'HR') return { scale: 8, span: 0.5, spikes: 16, cls: 'k-hr', inner: true, ring: true };
+  if (o === 'H3') return { scale: 3.2, span: 0.3, spikes: 12, cls: 'k-h3', inner: false, ring: false };
+  if (o === 'H2') return { scale: 2.4, span: 0.27, spikes: 10, cls: 'k-h2', inner: false, ring: false };
+  return { scale: 0.85, span: 0.16, spikes: 8, cls: 'k-n', inner: false, ring: false };
 }
 // ---- 打った後の球の動き（球審の視点：遠ざかるほど小さく、こちらへ来るほど大きく）----
 const BALL_R_PITCH = [2, 8];                      // 投球：手を離れたとき → ゾーンに着くときの半径
@@ -186,13 +215,22 @@ function stateAt(pitch, t, side) {
     const sy = clampR(1 + 0.35 * ((SP_GROUND - cyb) / (SP_GROUND - B[1]) - 1), 0.92, 1.10);
     const sx = clampR(1 + 0.3 * ((SP_FEET_X - cxb) / (SP_FEET_X - B[0]) - 1), 0.9, 1.1);
     const dx = clampR((cxb - B[0]) * 0.3, -16, 16);
-    const px = dx + SP_FEET_X + sx * (B[0] - SP_FEET_X), py = SP_GROUND + sy * (B[1] - SP_GROUND);
-    const d = Math.sqrt((px - cxb) * (px - cxb) + (py - cyb) * (py - cyb));
-    if (!best || d < best.d) best = { d: d, f: +k, sx: sx, sy: sy, dx: dx };
+    let score;
+    if (+k >= 42) {                                                     // バットが見えるコマ：バットを球へ向けるので、つけ根から球までが、バットの届く長さに収まるか
+      const G = SP_BAT[k], px = dx + SP_FEET_X + sx * (G.p[0] - SP_FEET_X), py = SP_GROUND + sy * (G.p[1] - SP_GROUND);
+      const d = Math.sqrt((px - cxb) * (px - cxb) + (py - cyb) * (py - cyb));
+      const err = Math.max(0, d - BAT_BARREL * BAT_LEN_MAX, BAT_BARREL * BAT_LEN_MIN - d);
+      score = err + 8 * (Math.abs(sx - 1) + Math.abs(sy - 1)) + 0.05 * Math.abs(dx) + ((+k === 42 || +k === 45) ? 2 : 0);
+    } else {                                                            // コマ39・40：バットが体に重なって見えない。芯がマスに近いときだけ選ばれる
+      const px = dx + SP_FEET_X + sx * (B[0] - SP_FEET_X), py = SP_GROUND + sy * (B[1] - SP_GROUND);
+      score = 0.6 * Math.sqrt((px - cxb) * (px - cxb) + (py - cyb) * (py - cyb));
+    }
+    if (!best || score < best.d) best = { d: score, f: +k, sx: sx, sy: sy, dx: dx };
   });
   S.f = keyf(swingKeys(best.f), clamp01(t - tShift));
   const k = easeInOut(clamp01(t / 0.5));
   S.sx = lerp(1, best.sx, k); S.sy = lerp(1, best.sy, k); S.dx = lerp(0, best.dx, k);
+  S.fc = best.f; S.aim = [cxb, cyb];                                              // バットを向ける先（打者側の座標）
   return S;
 }
 
@@ -200,7 +238,7 @@ function stateAt(pitch, t, side) {
 function renderFrame(parts, pitch, t, still) {
   const side = parts.side;
   const bxm = function (x) { return side === 'L' ? 320 - x : x; };   // 打者側の座標 → 画面の座標
-  parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0); parts.trail.setAttribute('opacity', 0);
+  parts.mitt.setAttribute('opacity', 0); parts.impact.setAttribute('opacity', 0); parts.impact2.setAttribute('opacity', 0); parts.ring.setAttribute('opacity', 0); parts.ball.setAttribute('opacity', 0); parts.cellHit.setAttribute('opacity', 0); parts.trail.setAttribute('opacity', 0);
   if (pitch) {
     const c = cellCenter(pitch.row, pitch.col), cx = c[0], cy = c[1];
     // 球（球審の視点：投げた球は遠くから近づいて大きくなり、打った球は遠ざかって小さくなる／ファウルは種類ごとに動く）
@@ -244,7 +282,19 @@ function renderFrame(parts, pitch, t, still) {
       const R0 = 6 + 14 * ik.scale * ww;
       for (let i = 0; i < n * 2; i++) { const r = (i % 2 === 0) ? R0 : R0 * 0.45, an = Math.PI * 2 * i / (n * 2); pts.push((hx + Math.cos(an) * r).toFixed(1) + ',' + (hy + Math.sin(an) * r).toFixed(1)); }
       parts.impact.setAttribute('points', pts.join(' '));
+      parts.impact.setAttribute('class', 'sil-impact ' + ik.cls);
       parts.impact.setAttribute('opacity', (1 - ww).toFixed(2));
+      if (ik.inner) {                                                              // 本塁打：2つ目の星（半分の大きさ・とげは逆向き）と、光の輪
+        const p2 = [], R2 = R0 * 0.55;
+        for (let i = 0; i < n * 2; i++) { const r = (i % 2 === 0) ? R2 : R2 * 0.5, an = Math.PI * 2 * (i + 0.5) / (n * 2); p2.push((hx + Math.cos(an) * r).toFixed(1) + ',' + (hy + Math.sin(an) * r).toFixed(1)); }
+        parts.impact2.setAttribute('points', p2.join(' '));
+        parts.impact2.setAttribute('opacity', (1 - ww * 0.8).toFixed(2));
+      }
+      if (ik.ring) {
+        parts.ring.setAttribute('cx', hx.toFixed(1)); parts.ring.setAttribute('cy', hy.toFixed(1));
+        parts.ring.setAttribute('r', (8 + 14 * ik.scale * 1.25 * easeOut(ww)).toFixed(1));
+        parts.ring.setAttribute('opacity', (0.9 * (1 - ww)).toFixed(2));
+      }
     }
     if (t >= T_HIT) { parts.cellHit.setAttribute('x', ZX0 + ZCELL * (pitch.col - 1)); parts.cellHit.setAttribute('y', ZY0 + ZCELL * (pitch.row - 1)); parts.cellHit.setAttribute('opacity', 1); }
   }
@@ -257,6 +307,29 @@ function applySprite(parts, S) {
   const tf = 'translate(' + S.dx.toFixed(1) + ' 0)' + (S.lean ? ' rotate(' + S.lean.toFixed(1) + ' ' + SP_FEET_X + ' ' + SP_GROUND + ')' : '') +
     ' translate(' + SP_FEET_X + ' ' + SP_GROUND + ') scale(' + S.sx.toFixed(3) + ' ' + S.sy.toFixed(3) + ') translate(' + (-SP_FEET_X) + ' ' + (-SP_GROUND) + ')';
   parts.fig.setAttribute('transform', tf);
+  applyBat(parts, S, fi);
+}
+// バットだけを球へ向ける：コマ42〜47で、元のバットを手もとで切り落とし、球の方へ向けたバットを描く。それ以外のコマは、動画のまま
+function applyBat(parts, S, fi) {
+  const g = S.aim ? batG(fi, S.fc) : 0;
+  if (g < 0.02) { parts.sprite.removeAttribute('clip-path'); parts.bat.setAttribute('opacity', 0); return; }
+  const O = batGeom(fi), C = batGeom(S.fc);
+  const tx = SP_FEET_X + (S.aim[0] - S.dx - SP_FEET_X) / S.sx, ty = SP_GROUND + (S.aim[1] - SP_GROUND) / S.sy;      // 球の位置を、体の絵の座標へ戻す
+  const aimAng = Math.atan2(ty - C.py, tx - C.px), dist = Math.sqrt((tx - C.px) * (tx - C.px) + (ty - C.py) * (ty - C.py));
+  const lenNeed = clampR(dist / BAT_BARREL, BAT_LEN_MIN, BAT_LEN_MAX);
+  let dAng = aimAng - C.ang; while (dAng > Math.PI) dAng -= 2 * Math.PI; while (dAng < -Math.PI) dAng += 2 * Math.PI;
+  const ang = O.ang + dAng * g, len = O.len + (lenNeed - C.len) * g;
+  parts.clipRect.setAttribute('x', O.px);                                                                           // つけ根より左（バット）を切り落とす
+  parts.sprite.setAttribute('clip-path', 'url(#' + parts.clipId + ')');
+  const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
+  const prof = [[-3, 1.8], [0, 1.6], [0.5, 2.4], [0.8, 3.8], [0.93, 4.3], [1, 3.6]], L = [], R = [];       // [つけ根からの割合（−3は、手の中へ3だけ入れる）, 半分の太さ]
+  prof.forEach(function (q) {
+    const along = q[0] < 0 ? q[0] : q[0] * len, x = O.px + ux * along, y = O.py + uy * along;
+    L.push((x + nx * q[1]).toFixed(1) + ',' + (y + ny * q[1]).toFixed(1)); R.unshift((x - nx * q[1]).toFixed(1) + ',' + (y - ny * q[1]).toFixed(1));
+  });
+  const ex = O.px + ux * (len + 1.5), ey = O.py + uy * (len + 1.5);
+  parts.bat.setAttribute('points', L.join(' ') + ' ' + ex.toFixed(1) + ',' + ey.toFixed(1) + ' ' + R.join(' '));
+  parts.bat.setAttribute('opacity', 1);
 }
 
 // ---- 打球の行き先（野球場の小さな図）----

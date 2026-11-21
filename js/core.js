@@ -1,6 +1,6 @@
 'use strict';
-// kyr-core.js（サンプル。仕様書 v0.3.1 の10章。この通りに実装すること）
-const KYR_CORE_VERSION = '0.3.1';
+// kyr-core.js（サンプル。仕様書 v0.3.6 の10章。この通りに実装すること）
+const KYR_CORE_VERSION = '0.3.6';
 const DAY_START_HOUR = 5;            // 1日の区切り（午前5時）。4-9
 const MIN_SAMPLE_REFERENCE = 5;      // 「参考程度」と添える球数のしきい値
 const NAME_SUGGEST_MAX = 30;         // 名前の候補の最大件数（投手・打者それぞれ。5.2）
@@ -25,8 +25,8 @@ function hBand(col, side) {
   if (d === -1) return 'OUT1';
   return 'OUT2';
 }
-const H_LABEL = { IN2: '内ボール', IN1: '内', MID: '真ん中', OUT1: '外', OUT2: '外ボール' };
-const V_LABEL = ['', '上ボール', '高め', '真ん中', '低め', '下ボール'];
+const H_LABEL = { IN2: '内（ゾーン外）', IN1: '内', MID: '真ん中', OUT1: '外', OUT2: '外（ゾーン外）' };
+const V_LABEL = ['', '上（ゾーン外）', '高め', '真ん中', '低め', '下（ゾーン外）'];
 function zoneLabel(row, col, side) {
   return H_LABEL[hBand(col, side)] + '・' + V_LABEL[row];
 }

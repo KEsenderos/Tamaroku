@@ -144,6 +144,12 @@ button:disabled { opacity: .45; cursor: default; }
 .sil-ground { stroke: var(--kyr-line); stroke-width: 2; }
 .sil-mitt { fill: var(--kyr-sub); }
 .sil-impact { fill: var(--kyr-flash); stroke: var(--kyr-text); stroke-width: 1.5; }
+.sil-impact.k-n { fill: var(--kyr-flash); stroke-width: 1.2; }
+.sil-impact.k-h2 { fill: #FDBA74; }
+.sil-impact.k-h3 { fill: #FB923C; stroke-width: 2; }
+.sil-impact.k-hr { fill: #F97316; stroke-width: 2.5; }
+.sil-impact2 { fill: #FEF9C3; stroke: #B91C1C; stroke-width: 1.5; }
+.sil-ring { stroke: #F59E0B; stroke-width: 3; }
 .sil-ball { stroke: var(--kyr-text); stroke-width: 1.5; fill: #FFFFFF; }
 .fd-grass { fill: #166534; } .fd-dirt { fill: #A16207; opacity: .8; }
 .fd-wall { fill: none; stroke: #FFFFFF; stroke-width: 1.5; }

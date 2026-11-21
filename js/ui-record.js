@@ -1,5 +1,5 @@
 'use strict';
-// ui-record.js（球録 v0.3.1）記録タブ。利用者が入れた文字は、すべて textContent で出す
+// ui-record.js（球録 v0.3.6）記録タブ。利用者が入れた文字は、すべて textContent で出す
 
 // 画面の部品を作る小さな関数（ほかのファイルからも使う）
 function el(tag, attrs, kids) {
@@ -564,7 +564,8 @@ function onResultTap(r, call, reaction) {
   if (typeof awakeTouch === 'function') awakeTouch();
   if (!R.draft) R.draft = { pitchId: newId('p', Date.now(), Math.random()) };       // 球のIDは、入力を始めた時点で1つ作る
   R.draft.result = r;
-  R.draft.takenCall = (r === 'TAKEN') ? call : undefined;                            // 見逃しのボール・ストライクは、押したボタンで決まる
+  R.draft.takenCall = (r === 'TAKEN') ? call : undefined;                            // 見逃しのボール・ストライクの初期値（ゾーンを押すと、下で決め直す）
+  R.draft.callAuto = (r === 'TAKEN') && !(call === 'B' && reaction === 'NONE');      // ［ボール］以外の見逃しは、押したゾーンの位置で判定する（v0.3.4）
   R.draft.reaction = reaction || undefined;                                          // 見逃し・空振りの反応
   R.state = 'AWAIT_ZONE';
   renderRecord();
@@ -596,8 +597,9 @@ function buildZone() {
     el('div', { class: 'zone-row' + (side === 'L' ? ' left' : '') }, [el('div', { class: 'zone-col' }, [cap, el('div', { id: 'zone-grid', class: 'zone' }, rows)]), batterFigure(side)]),
     (d && d.result === 'TAKEN' && d.row) ? el('div', { class: 'btn-row' }, [
       el('span', { id: 'taken-call', text: '判定：' + (d.takenCall === 'S' ? 'ストライク' : 'ボール') }),
-      el('button', { type: 'button', class: 'btn small', id: 'taken-flip', text: '判定を逆にする', onclick: function () { if (R.isSaving) return; d.takenCall = (d.takenCall === 'S') ? 'B' : 'S'; renderRecord(); } })
-    ]) : null
+      el('button', { type: 'button', class: 'btn small', id: 'taken-flip', text: '判定を逆にする', onclick: function () { if (R.isSaving) return; d.takenCall = (d.takenCall === 'S') ? 'B' : 'S'; renderRecord(); } }),
+      (d.takenCall !== takenCallFromZone(d.row, d.col)) ? el('span', { id: 'taken-warn', class: 'zone-cap', text: '※押したマスの位置と判定が違います' }) : null
+    ]) : ((d && d.result === 'MISS' && d.row) ? el('div', { class: 'btn-row' }, [el('span', { id: 'miss-call', text: '判定：ストライク（空振りは、ゾーンの外でもストライク）' })]) : null)
   ]);
 }
 function onZoneTap(row, col) {
@@ -605,6 +607,7 @@ function onZoneTap(row, col) {
   if (R.state !== 'AWAIT_ZONE' && R.state !== 'AWAIT_TYPE') return;
   if (typeof awakeTouch === 'function') awakeTouch();
   R.draft.row = row; R.draft.col = col;
+  if (R.draft.result === 'TAKEN' && R.draft.callAuto) R.draft.takenCall = takenCallFromZone(row, col);   // 見逃し（［ボール］以外）は、投げた位置で、ストライク（ゾーン内）かボール（ゾーン外）が決まる（［判定を逆にする］で直せる。v0.3.4）
   R.state = 'AWAIT_TYPE';
   renderRecord();
 }
