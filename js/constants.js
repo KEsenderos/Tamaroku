@@ -1,6 +1,6 @@
 'use strict';
-// constants.js（球録 v0.3.6・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
-const APP_VERSION = '0.3.6';
+// constants.js（球録 v0.3.7・段階3）定数。core.js の定数（DAY_START_HOUR など）はここに重ねて書かない
+const APP_VERSION = '0.3.7';
 const APP_STAGE = 3;                  // 1=記録・設定 / 2=振り返り / 3=シルエット（6.4）
 const SCHEMA_VERSION = 1;             // 保存の形の版
 const DB_NAME = 'kyr-db';
